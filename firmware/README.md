@@ -1,10 +1,19 @@
 # firmware
 
-The gear's firmware: the ESP32 IR blaster and the worn IR hit sensors.
+The gear's firmware: the ESP32-C3 blaster and the vest hub (ESP-IDF, design
+decision 9).
 
-Placeholder. Nothing is built here until the owner accepts the design
-(`docs/design.md`). The toolchain (ESP-IDF or Arduino/PlatformIO), the IR
-protocol and the phone-to-gear link are open questions in
-[docs/brief.md](../docs/brief.md).
+- `lib/`: the portable C library, no ESP-IDF includes: IR codec (`lf_ir`),
+  rules engine (`lf_rules`), emitter safety gate (`lf_emitter`), BLE messages
+  and event queue (`lf_ble`). Tested on the host: `make test`.
+- `tests/`: the host tests; they read the shared vectors in `../protocol/`.
+- `idf/`: the ESP-IDF project. `main/` holds only hardware glue (RMT driver,
+  GPIO, tasks); the roles are `sdkconfig.<role>` overlays (`blaster`,
+  `blaster-bench`; the hub arrives with M6).
+- `scripts/idf-build.sh`: compiles the roles in the `espressif/idf` container
+  (what `scripts/verify` and CI run; nothing is flashed).
+- `scripts/idf-flash.sh`: builds and flashes one board: an owner step.
 
-Flashing a board is an owner step that needs the owner's approval.
+Hardware: [docs/hardware.md](../docs/hardware.md). Bench procedure after the
+first boards are built: [docs/bench.md](../docs/bench.md). Flashing a board
+needs the owner's approval.
