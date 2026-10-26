@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -54,6 +55,9 @@ func do(t *testing.T, method, url string, in, out any) int {
 // Simulated phones fire a seeded battle with replayed reports; the board must
 // equal the independent count, for both modes.
 func TestSimulatedBattles(t *testing.T) {
+	// One CPU is the slowest runner we meet (CI): scoreboards must coalesce
+	// rather than overflow a phone's queue and drop its connection.
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
 	ts, _, st := start(t, filepath.Join(t.TempDir(), "lf.db"))
 	defer ts.Close()
 	defer st.Close()

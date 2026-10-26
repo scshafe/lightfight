@@ -38,9 +38,29 @@ type entry struct {
 	timer *time.Timer
 }
 
+// A subscriber gets two kinds of message. Acks, confirmations and errors are
+// queued in order. Scoreboards are not queued at all: a flag says "send the
+// current one", so a burst of hits costs a slow phone one snapshot, not one
+// per hit, and can never overflow its queue.
 type sub struct {
 	player string // empty: a spectator
 	out    chan []byte
+	dirty  chan struct{} // capacity 1: the scoreboard changed
+	done   chan struct{}
+	once   sync.Once
+}
+
+func newSub(player string) *sub {
+	return &sub{player: player, out: make(chan []byte, 256), dirty: make(chan struct{}, 1), done: make(chan struct{})}
+}
+
+func (c *sub) close() { c.once.Do(func() { close(c.done) }) }
+
+func (c *sub) markDirty() {
+	select {
+	case c.dirty <- struct{}{}:
+	default:
+	}
 }
 
 // New loads every stored match, rebuilding scores by replaying their reports,
@@ -270,19 +290,16 @@ func (s *Server) arm(e *entry) {
 }
 
 func (s *Server) broadcast(e *entry) {
-	msg, _ := json.Marshal(struct {
-		Type string `json:"type"`
-		match.Snapshot
-	}{"snapshot", e.m.Snapshot()})
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for c := range e.subs {
-		e.send(c, msg)
+		c.markDirty()
 	}
 }
 
-// send never blocks on a slow phone: it drops the message and, if the phone's
-// queue stays full, the connection (it reconnects and gets a fresh snapshot).
+// send queues a message for one phone without blocking. A phone that lets 256
+// replies pile up is gone or stuck: it is dropped and reconnects (its gear
+// replays whatever it never got acknowledged).
 func (e *entry) send(c *sub, msg []byte) {
 	if _, ok := e.subs[c]; !ok {
 		return // already dropped or gone
@@ -291,9 +308,17 @@ func (e *entry) send(c *sub, msg []byte) {
 	case c.out <- msg:
 	default:
 		log.Printf("match %s: dropping a slow subscriber", e.m.ID)
-		close(c.out)
 		delete(e.subs, c)
+		c.close()
 	}
+}
+
+func snapshotMsg(m *match.Match) []byte {
+	b, _ := json.Marshal(struct {
+		Type string `json:"type"`
+		match.Snapshot
+	}{"snapshot", m.Snapshot()})
+	return b
 }
 
 type wsIn struct {
@@ -322,17 +347,15 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.CloseNow()
 	conn.SetReadLimit(maxBody)
-	c := &sub{player: player, out: make(chan []byte, 32)}
+	c := newSub(player)
 	e.mu.Lock()
 	e.subs[c] = struct{}{}
 	e.mu.Unlock()
 	defer func() {
 		e.mu.Lock()
-		if _, ok := e.subs[c]; ok {
-			delete(e.subs, c)
-			close(c.out)
-		}
+		delete(e.subs, c)
 		e.mu.Unlock()
+		c.close()
 	}()
 
 	s.serve(r.Context(), conn, e, c)
@@ -348,21 +371,38 @@ type ackOut struct {
 // goes away while a second goroutine drains the outgoing queue.
 func (s *Server) serve(ctx context.Context, conn *websocket.Conn, e *entry, c *sub) {
 	e.m.Expire()
-	first, _ := json.Marshal(struct {
-		Type string `json:"type"`
-		match.Snapshot
-	}{"snapshot", e.m.Snapshot()})
-	e.mu.Lock()
-	e.send(c, first)
-	e.mu.Unlock()
+	c.markDirty() // the first message is the scoreboard
 
 	go func() {
-		for msg := range c.out {
+		write := func(msg []byte) bool {
 			wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			err := conn.Write(wctx, websocket.MessageText, msg)
-			cancel()
-			if err != nil {
+			defer cancel()
+			if err := conn.Write(wctx, websocket.MessageText, msg); err != nil {
 				conn.CloseNow()
+				return false
+			}
+			return true
+		}
+		for {
+			select { // replies first, so an ack never trails the scoreboard it caused
+			case msg := <-c.out:
+				if !write(msg) {
+					return
+				}
+				continue
+			default:
+			}
+			select {
+			case msg := <-c.out:
+				if !write(msg) {
+					return
+				}
+			case <-c.dirty:
+				if !write(snapshotMsg(e.m)) {
+					return
+				}
+			case <-c.done:
+				conn.CloseNow() // dropped as too slow: the phone reconnects
 				return
 			}
 		}
