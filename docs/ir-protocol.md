@@ -21,8 +21,8 @@ Durations in microseconds, alternating mark/space, 51 durations in all:
 | Each of 24 bits | 560 | 560 for 0, 1690 for 1 |
 | Trailer | 560 | none |
 
-A frame lasts 40–70 ms (bit values decide; about 41 ms for an all-zero word,
-about 79 ms worst case). Bits go most significant first.
+A frame lasts 32–59 ms (the bit values decide: about 32 ms for an all-zero
+word, about 59 ms for all ones). Bits go most significant first.
 
 ## Payload (24 bits)
 
