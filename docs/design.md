@@ -1,14 +1,15 @@
 # lightfight design
 
-Status: **proposed**, awaiting the owner's acceptance. Nothing past the
-skeleton is built until then. `docs/brief.md` is fixed; this file is kept in
+Status: **accepted** by the owner on 2026-10-26, all 11 Owner decisions as
+recommended. `docs/brief.md` is fixed; this file is kept in
 step with the code. Prices and part choices are estimates to be checked at
 purchase time; the owner buys the hardware.
 
 ## Owner decisions
 
 Each open question from the brief, with a recommendation and the alternatives.
-The owner decides; nothing below is settled until then.
+The owner accepted every recommendation on 2026-10-26; the alternatives are
+recorded for reference.
 
 | # | Question | Recommendation | Alternatives |
 |---|----------|----------------|--------------|
