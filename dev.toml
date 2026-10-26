@@ -46,3 +46,4 @@ params = { kind = "service", name = "lightfight", date = "2026-10-26" }
 [identity]
 agent = "agent-lightfight"
 github = ["contents=write", "pull_requests=write", "issues=write", "workflows=write", "actions=write"]
+docker = true
