@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
-# The repository's one verify command (dev.toml [verify]): run the repository
-# tests with the standard library's unittest. CI runs the same command. The
-# firmware, ios and server parts add their own builds and tests here once the
-# design is accepted.
+# The repository's one verify command (dev.toml [verify]): the repository
+# tests, then each part's tests when the part has them. CI runs the same
+# command. A part joins by adding the file named below; nothing else changes.
+#   firmware/Makefile  -> host tests of the portable C library (make test)
+#   server/go.mod      -> go vet and go test
+# The iOS tests need a Mac and run there (ios/README.md), not here.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 python3 -B -m unittest discover -s tests -t . -v
+
+if [ -f firmware/Makefile ]; then
+  echo "== firmware host tests"
+  make -C firmware test
+fi
+
+if [ -f server/go.mod ]; then
+  echo "== server tests"
+  (cd server && go vet ./... && go test ./...)
+fi
