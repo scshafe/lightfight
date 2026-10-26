@@ -74,7 +74,7 @@ def durations_us(bs):
 
 
 def crc8(data):
-    crc = 0
+    crc = 0xFF
     for byte in data:
         crc ^= byte
         for _ in range(8):

@@ -35,7 +35,7 @@ final class VectorTests: XCTestCase {
             XCTAssertEqual(try f.pack(), word)
             XCTAssertEqual(try IRFrame.unpack(word), f)
         }
-        XCTAssertThrowsError(try IRFrame.unpack(0x1539B9 ^ 1)) {
+        XCTAssertThrowsError(try IRFrame.unpack(0x15396E ^ 1)) {
             XCTAssertEqual($0 as? ProtocolError, .crc)
         }
     }

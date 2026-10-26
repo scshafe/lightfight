@@ -32,7 +32,7 @@ word, about 59 ms for all ones). Bits go most significant first.
 | 17..15 | team | 0..7 |
 | 14..12 | damage code | 0..7 (a table set by the match, never a raw value) |
 | 11..8 | sequence | 0..15, +1 per shot, wraps |
-| 7..0 | CRC-8 | poly 0x07, init 0, no reflection, no final xor, over the first 16 bits as two bytes (high byte first) |
+| 7..0 | CRC-8 | poly 0x07, init 0xFF, no reflection, no final xor, over the first 16 bits as two bytes (high byte first) |
 
 ## Receiving
 
@@ -43,6 +43,12 @@ word, about 59 ms for all ones). Bits go most significant first.
 - The CRC has Hamming distance 4 at 24 bits, so every 1-, 2- or 3-bit error
   is detected. A random 24-bit word passes the CRC about 1 time in 256, but
   random durations essentially never pass the timing checks.
+- The CRC starts from 0xFF so an all-zero word (what a garbled union of two
+  overlapping frames tends to look like) is not a valid frame. Even so, two
+  blasters hitting one sensor in the same 50 ms can, rarely, read as a third
+  valid frame: the host test `test_rx` measures about 1 in 5000 collisions. A
+  CRC-16 (8 more bits, +9 ms per frame) would remove that; it is a decision
+  for the owner (PR for M6), not made here.
 - De-duplication by `(shooter, seq)` is the rules engine's job (M2), not the
   codec's.
 

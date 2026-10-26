@@ -57,37 +57,37 @@ class CaptureTest(unittest.TestCase):
         self.assertEqual(sum("ok {" in l for l in lines), len(words))
 
     def test_fields_reported(self):
-        lines, ok = lfcapture.analyze(capture([0x1539B9]))
+        lines, ok = lfcapture.analyze(capture([0x15396E]))
         self.assertTrue(ok)
         self.assertIn("'shooter': 5", "\n".join(lines))
         self.assertIn("'seq': 9", "\n".join(lines))
 
     def test_wrong_carrier_fails(self):
-        lines, ok = lfcapture.analyze(capture([0x1539B9], carrier=36000.0))
+        lines, ok = lfcapture.analyze(capture([0x15396E], carrier=36000.0))
         self.assertFalse(ok)
         self.assertIn("carrier", "\n".join(lines))
 
     def test_duty_over_budget_fails(self):
-        lines, ok = lfcapture.analyze(capture([0x1539B9], duty=0.65))
+        lines, ok = lfcapture.analyze(capture([0x15396E], duty=0.65))
         self.assertFalse(ok)
         self.assertIn("duty", "\n".join(lines))
 
     def test_slow_timing_fails(self):
-        lines, ok = lfcapture.analyze(capture([0x1539B9], scale=1.2))
+        lines, ok = lfcapture.analyze(capture([0x15396E], scale=1.2))
         self.assertFalse(ok, "\n".join(lines))
 
     def test_too_fast_fire_fails(self):
-        lines, ok = lfcapture.analyze(capture([0x1539B9, 0x1539B9], interval=0.1))
+        lines, ok = lfcapture.analyze(capture([0x15396E, 0x15396E], interval=0.1))
         self.assertFalse(ok)
         self.assertIn("250 ms", "\n".join(lines))
 
     def test_bad_crc_fails(self):
-        lines, ok = lfcapture.analyze(capture([0x1539B9 ^ 1]))
+        lines, ok = lfcapture.analyze(capture([0x15396E ^ 1]))
         self.assertFalse(ok)
         self.assertIn("CRC", "\n".join(lines))
 
     def test_stray_mark_fails(self):
-        text = capture([0x1539B9])
+        text = capture([0x15396E])
         text += "5.000000000,1\n5.000013000,0\n"  # a lone pulse long after the frame
         lines, ok = lfcapture.analyze(text)
         self.assertFalse(ok)

@@ -63,7 +63,7 @@ static void test_range(void)
  * error in a frame must be rejected. */
 static void test_bit_errors_rejected(void)
 {
-    const uint32_t base = 0x1539B9;
+    const uint32_t base = 0x15396E;
     lf_ir_frame g;
     for (int i = 0; i < 24; i++) {
         CHECK(lf_ir_unpack(base ^ (1u << i), &g) == LF_IR_ERR_CRC);

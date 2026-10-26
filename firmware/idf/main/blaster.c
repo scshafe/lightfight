@@ -1,6 +1,8 @@
 /* The blaster: trigger -> rules (ammo, rate) -> safety gate -> IR frame. */
 #include "blaster.h"
 
+#include <stdio.h>
+
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -10,6 +12,7 @@
 #include "emitter_rmt.h"
 #include "lf_emitter.h"
 #include "lf_ir.h"
+#include "lf_log.h"
 #include "lf_rules.h"
 
 static const char *TAG = "blaster";
@@ -64,7 +67,10 @@ static void fire(lf_rules *rules, lf_emitter *gate)
         fault_halt();
     }
     lf_emitter_done(gate);
-    ESP_LOGI(TAG, "shot shooter=%u seq=%u ammo=%u", frame.shooter, frame.seq, (unsigned)rules->ammo);
+    char line[96];
+    lf_log_entry e = {.kind = LF_LOG_SHOT, .t_ms = now_ms(), .sensor = -1, .frame = frame};
+    if (lf_log_format(&e, line, sizeof line))
+        printf("%s\n", line);
 }
 
 void blaster_run(void)

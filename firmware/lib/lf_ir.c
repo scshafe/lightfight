@@ -2,7 +2,7 @@
 
 uint8_t lf_ir_crc8(const uint8_t *data, size_t len)
 {
-    uint8_t crc = 0;
+    uint8_t crc = 0xFF; /* not 0, so an all-zero word is not a valid frame */
     for (size_t i = 0; i < len; i++) {
         crc ^= data[i];
         for (int b = 0; b < 8; b++)
