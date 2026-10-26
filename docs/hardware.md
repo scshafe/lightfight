@@ -52,6 +52,13 @@ in the supply, on a wired harness (chest, left and right shoulder, two on the
 headband); a coin vibration motor behind a MOSFET with a flyback diode; a
 buzzer; status LEDs. Same battery arrangement as the blaster.
 
+Hub pins (defaults in `Kconfig.projbuild`, XIAO labels): receivers on GPIO3-7
+(D1-D5: chest, left shoulder, right shoulder, headband front, headband back),
+vibration motor gate GPIO21 (D6), buzzer GPIO20 (D7), status LED GPIO10 (D10).
+A receiver module's output is open-collector-like with an internal pull-up and
+idles high; keep each harness lead short or shielded, as it carries 560 us
+edges.
+
 ## Prototype shopping list (2 players, with spares)
 
 | Item | Qty |

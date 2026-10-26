@@ -5,9 +5,9 @@ type IRFrame struct {
 	Shooter, Team, Damage, Seq uint8
 }
 
-// CRC8 is CRC-8, polynomial 0x07, init 0, no reflection, no final xor.
+// CRC8 is CRC-8, polynomial 0x07, init 0xFF, no reflection, no final xor.
 func CRC8(data []byte) uint8 {
-	var crc uint8
+	crc := uint8(0xFF)
 	for _, d := range data {
 		crc ^= d
 		for i := 0; i < 8; i++ {

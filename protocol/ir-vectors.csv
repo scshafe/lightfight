@@ -1,10 +1,10 @@
-# shooter,team,damage_code,seq,frame_hex24 (independent Python CRC-8, poly 0x07, init 0)
-0,0,0,0,000000
-1,0,0,0,040054
-63,7,7,15,FFFF24
-5,2,3,9,1539B9
-42,1,4,0,A8C0FE
-17,3,6,15,45EF99
-33,5,1,7,869724
-63,0,0,1,FC01EF
-0,7,7,8,03F8D9
+# shooter,team,damage_code,seq,frame_hex24 (independent Python CRC-8, poly 0x07, init 0xFF)
+0,0,0,0,0000D7
+1,0,0,0,040083
+63,7,7,15,FFFFF3
+5,2,3,9,15396E
+42,1,4,0,A8C029
+17,3,6,15,45EF4E
+33,5,1,7,8697F3
+63,0,0,1,FC0138
+0,7,7,8,03F80E

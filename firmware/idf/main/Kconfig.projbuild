@@ -27,6 +27,41 @@ menu "lightfight"
         int "GPIO of the status LED"
         default 10
 
+    config LF_PIN_SENSOR0
+        int "GPIO of IR receiver 0, chest (hub)"
+        default 3
+        depends on LF_ROLE_HUB
+
+    config LF_PIN_SENSOR1
+        int "GPIO of IR receiver 1, left shoulder (hub)"
+        default 4
+        depends on LF_ROLE_HUB
+
+    config LF_PIN_SENSOR2
+        int "GPIO of IR receiver 2, right shoulder (hub)"
+        default 5
+        depends on LF_ROLE_HUB
+
+    config LF_PIN_SENSOR3
+        int "GPIO of IR receiver 3, headband front (hub)"
+        default 6
+        depends on LF_ROLE_HUB
+
+    config LF_PIN_SENSOR4
+        int "GPIO of IR receiver 4, headband back (hub)"
+        default 7
+        depends on LF_ROLE_HUB
+
+    config LF_PIN_HAPTIC
+        int "GPIO of the vibration motor's MOSFET gate (hub)"
+        default 21
+        depends on LF_ROLE_HUB
+
+    config LF_PIN_BUZZER
+        int "GPIO of the buzzer (hub)"
+        default 20
+        depends on LF_ROLE_HUB
+
     config LF_STANDALONE
         bool "Start a match at boot with default rules (bench use, before BLE)"
         default y

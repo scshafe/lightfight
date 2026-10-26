@@ -141,7 +141,7 @@ public struct IRFrame: Equatable {
     }
 
     public static func crc8(_ bytes: [UInt8]) -> UInt8 {
-        var crc: UInt8 = 0
+        var crc: UInt8 = 0xFF
         for b in bytes {
             crc ^= b
             for _ in 0..<8 { crc = crc & 0x80 != 0 ? (crc << 1) ^ 0x07 : crc << 1 }

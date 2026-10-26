@@ -67,7 +67,7 @@ func TestIRVectors(t *testing.T) {
 }
 
 func TestIRBitErrors(t *testing.T) {
-	const base = 0x1539B9
+	const base = 0x15396E
 	for i := 0; i < 24; i++ {
 		for j := i; j < 24; j++ {
 			w := uint32(base) ^ 1<<i
