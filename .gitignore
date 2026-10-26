@@ -1,0 +1,22 @@
+# Player data never enters git (docs/brief.md): it lives outside the repository.
+/data/
+data/
+.env
+*.log
+
+# Python (repository tests)
+__pycache__/
+*.py[cod]
+.venv/
+
+# Firmware builds (ESP-IDF, PlatformIO)
+/firmware/**/build/
+.pio/
+sdkconfig.old
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+
+.DS_Store
