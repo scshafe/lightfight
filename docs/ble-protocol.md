@@ -50,7 +50,7 @@ queues an `event` (`lf_evq`, 32 slots).
   order). An old or repeated ack changes nothing.
 - On (re)connection, the gear sends every still-unacknowledged event again, in
   order, then continues. The phone ignores ids it already has, and the server
-  de-duplicates by `(target, shooter, seq)`, so a replay is safe.
+  de-duplicates by `(target, event_id, t_ms)`, so a replay is safe.
 - If more than 32 events pile up unacknowledged the oldest is dropped (a
   sustained loss of the link of more than 32 hits; the state message still
   carries the true health).
