@@ -40,7 +40,7 @@ config.
 | `GET /ws?match={id}&player={pid}` | WebSocket; omit `player` to spectate |
 
 WebSocket, phone to server: `{"type":"hit","target":"<pid>","event_id":N,"shooter":S,"seq":Q,"damage":D,"health_after":H,"down":false,"t_ms":T}`.
-Server to phone: `{"type":"snapshot",...}` on connect and after every change,
+Server to phone: `{"type":"snapshot",...}` on connect and after changes (a burst of hits to a slow phone is one snapshot, the latest),
 `{"type":"ack","event_id":N,"result":"accepted"|"duplicate"|"rejected","reason":...}`
 to the sender (the phone then writes the BLE `ack`), and
 `{"type":"confirmed","target":"<pid>","down":bool}` to the shooter.

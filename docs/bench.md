@@ -124,6 +124,42 @@ hits, in the PR, with the `lfhits.py` output attached. If sunlight saturates
 the receivers (`stuck` in the `rx` lines), say so; that is a finding, not a
 failure of the test.
 
+## B8 - the phone link
+
+No iOS app is needed: install a generic BLE tool on the phone (for example
+nRF Connect). Flash the hub (or the blaster) as before.
+
+1. Power up a board with no bonded phone: within 60 s it appears as `LF-xxxx`
+   (the last two bytes of its Bluetooth address) advertising the lightfight
+   service (UUID `4c460000-7f1a-4b6e-9c3d-2a5e8b1d0f47`). Connect and, when the
+   phone asks, pair. The monitor prints "connected" and later "mtu".
+2. The characteristics are `...0001` config, `...0002` command, `...0003`
+   state, `...0004` events, `...0005` ack. Read state: 7 bytes (docs/ble-
+   protocol.md). Subscribe to state: a notification at once, then on change
+   and every second.
+3. In the hub: subscribe to events, then hit the vest with the blaster (B6):
+   each hit arrives as a 13-byte event with event ids 1, 2, 3. Do not write
+   ack. Disconnect and reconnect, subscribe again: all the events come again,
+   in order. Write ack with the last id (`01` followed by the id as two bytes,
+   little endian, so id 3 is `010300`) and reconnect: none come.
+4. Commands: write `0102` (stop) to command: the state's flags lose the
+   "active" bit; `0101` (start) restores health and ammo. Writing `0109` or a
+   wrong length is rejected by the phone tool as an ATT error.
+5. Config: with the match stopped, write a 23-byte config (the first `config` row of
+   `protocol/ble-vectors.csv`, or the `config_hex` of a server join reply), then
+   start:
+   the monitor and state show the new health and ammo. (With the default
+   `LF_STANDALONE=y` the board starts a match at boot: stop it first.)
+6. Reconnection: walk out of range and back, or switch the phone's Bluetooth
+   off and on: the phone reconnects on its own to a bonded board. Record how
+   long it takes.
+7. A second phone that is not bonded: outside the pairing window it must be
+   dropped as soon as it tries to pair. Hold the pair button 3 s and it can
+   pair. Hold 10 s: the first phone must be asked to pair again.
+
+Report what happened at each step in the PR. These steps are the first time
+this code runs on a board.
+
 ## Records
 
 Keep the results (numbers and the capture's output) in the PR that reports
