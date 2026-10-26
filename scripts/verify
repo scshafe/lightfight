@@ -4,7 +4,8 @@
 # command. A part joins by adding the file named below; nothing else changes.
 #   firmware/Makefile  -> host tests of the portable C library (make test)
 #   server/go.mod      -> go vet and go test
-# The iOS tests need a Mac and run there (ios/README.md), not here.
+#   ios/Package.swift  -> swift test, only where swift is installed (skipped
+#                         otherwise; CI's runner has none, see ios/README.md)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -18,4 +19,13 @@ fi
 if [ -f server/go.mod ]; then
   echo "== server tests"
   (cd server && go vet ./... && go test ./...)
+fi
+
+if [ -f ios/Package.swift ]; then
+  if command -v swift >/dev/null 2>&1; then
+    echo "== ios package tests"
+    (cd ios && swift test)
+  else
+    echo "== ios package tests skipped: swift is not installed"
+  fi
 fi
