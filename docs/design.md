@@ -66,7 +66,7 @@ Further owner steps are listed under Owner steps at the end.
 3. The hub subtracts damage, plays feedback, and sends a `hit` event over
    BLE: `{target, shooter, seq, damage, health_after, t}`. Kills send `down`.
 4. The phone shows it and forwards it over WebSocket. The server stores it
-   under the idempotent key `(target, shooter, seq)` and updates the
+   under the idempotent key `(target, gear event id, gear uptime)` (the IR `seq` wraps every 16 shots, so it cannot be the key alone) and updates the
    scoreboard; the shooter's phone receives "hit confirmed" and the kill.
 5. Events are queued on the phone (and the last N on the hub) and replayed
    after a drop; the idempotent key makes replay safe.
