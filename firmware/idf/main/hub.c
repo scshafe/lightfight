@@ -19,7 +19,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "gatt.h"
 #include "lf_hub.h"
+#include "lf_link.h"
 #include "lf_log.h"
 
 static const char *TAG = "hub";
@@ -37,6 +39,14 @@ static const int s_pins[LF_HUB_SENSORS] = {
 static edge_t s_ring[RING];
 static volatile uint32_t s_head, s_tail, s_dropped;
 static lf_hub s_hub;
+static SemaphoreHandle_t s_lock; /* the hub task and the BLE callbacks share s_hub */
+
+static void link_config(void *c, const lf_ble_config *v) { lf_hub_apply_config(c, v); }
+static int link_command(void *c, uint8_t cmd, uint32_t ms) { return lf_hub_command(c, cmd, ms); }
+static void link_ack(void *c, uint16_t id) { lf_hub_ack(c, id); }
+/* battery: 100 until a divider on an ADC pin exists (not in the BOM yet) */
+static void link_state(void *c, lf_ble_state *s) { lf_hub_state(c, 100, s); }
+static const lf_ble_event *link_pending(void *c, unsigned i) { return lf_evq_pending(&((lf_hub *)c)->events, i); }
 
 static void IRAM_ATTR on_edge(void *arg)
 {
@@ -79,6 +89,10 @@ void hub_run(void)
     lf_hub_command(&s_hub, LF_CMD_START, now_us() / 1000);
 #endif
 
+    s_lock = xSemaphoreCreateMutex();
+    static const lf_link_ops ops = {&s_hub, link_config, link_command, link_ack, link_state, link_pending};
+    gatt_start(&ops, s_lock);
+
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     for (int i = 0; i < LF_HUB_SENSORS; i++) {
         gpio_config_t io = {
@@ -95,6 +109,7 @@ void hub_run(void)
     uint32_t haptic_off_ms = 0, last_counters_ms = 0, last_dropped = 0;
     int haptic_on = 0;
     for (;;) {
+        xSemaphoreTake(s_lock, portMAX_DELAY);
         while (s_tail != s_head) {
             edge_t e = s_ring[s_tail];
             s_tail = (s_tail + 1) % RING;
@@ -122,6 +137,7 @@ void hub_run(void)
                 last_dropped = s_dropped;
             }
         }
+        xSemaphoreGive(s_lock);
         vTaskDelay(1);
     }
 }

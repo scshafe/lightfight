@@ -10,12 +10,64 @@
 #include "freertos/task.h"
 
 #include "emitter_rmt.h"
+#include "gatt.h"
 #include "lf_emitter.h"
+#include "lf_link.h"
 #include "lf_ir.h"
 #include "lf_log.h"
 #include "lf_rules.h"
 
 static const char *TAG = "blaster";
+
+static lf_rules s_rules;
+static lf_emitter s_gate;
+static SemaphoreHandle_t s_lock; /* the trigger loop and the BLE callbacks share s_rules */
+
+static void link_config(void *c, const lf_ble_config *v)
+{
+    (void)c;
+    if (s_rules.active)
+        return; /* applies to the next match */
+    lf_rules_config r = lf_rules_default_config(v->player, v->team);
+    r.damage_code = v->damage_code;
+    r.friendly_fire = v->friendly_fire;
+    r.max_health = v->max_health;
+    r.magazine = v->magazine;
+    r.reload_ms = v->reload_ms;
+    r.respawn_ms = v->respawn_ms;
+    /* never ask for shots the safety gate would refuse after spending the ammo */
+    r.fire_interval_ms = v->fire_interval_ms > s_gate.lim.min_interval_ms ? v->fire_interval_ms : s_gate.lim.min_interval_ms;
+    for (int i = 0; i < 8; i++)
+        r.damage_table[i] = v->damage_table[i];
+    lf_rules_init(&s_rules, &r);
+}
+
+static int link_command(void *c, uint8_t cmd, uint32_t ms)
+{
+    (void)c;
+    if (cmd == LF_CMD_START && !s_rules.active) {
+        lf_rules_start(&s_rules, ms);
+        return 1;
+    }
+    if (cmd == LF_CMD_STOP && s_rules.active) {
+        lf_rules_stop(&s_rules);
+        return 1;
+    }
+    return 0;
+}
+
+static void link_ack(void *c, uint16_t id) { (void)c; (void)id; } /* the blaster has no events */
+
+/* battery: 100 until a divider on an ADC pin exists (not in the BOM yet) */
+static void link_state(void *c, lf_ble_state *s)
+{
+    (void)c;
+    s->flags = (uint8_t)((s_rules.active ? LF_STATE_ACTIVE : 0) | (s_rules.alive ? LF_STATE_ALIVE : 0) |
+                         (s_rules.reloading ? LF_STATE_RELOADING : 0));
+    s->health = s_rules.health;
+    s->ammo = s_rules.ammo;
+    s->battery_pct = 100;
+}
 
 static uint32_t now_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
@@ -32,6 +84,7 @@ static void input_pin(int pin)
 static void fault_halt(void)
 {
     lf_rmt_kill();
+    xSemaphoreGive(s_lock); /* the caller holds it; the BLE side may go on answering */
     ESP_LOGE(TAG, "emitter fault: LED held off until reset");
     for (;;) {
         gpio_set_level(CONFIG_LF_PIN_STATUS_LED, 1);
@@ -81,36 +134,42 @@ void blaster_run(void)
     input_pin(CONFIG_LF_PIN_TRIGGER);
     input_pin(CONFIG_LF_PIN_RELOAD);
 
-    lf_emitter gate;
     lf_emitter_limits lim = lf_emitter_default_limits();
-    lf_emitter_init(&gate, &lim);
+    lf_emitter_init(&s_gate, &lim);
 
-    lf_rules rules;
     lf_rules_config cfg = lf_rules_default_config(CONFIG_LF_PLAYER_ID, CONFIG_LF_TEAM);
-    lf_rules_init(&rules, &cfg);
-    lf_rules_start(&rules, now_ms());
+    lf_rules_init(&s_rules, &cfg);
+#if CONFIG_LF_STANDALONE
+    lf_rules_start(&s_rules, now_ms());
+#endif
+
+    s_lock = xSemaphoreCreateMutex();
+    static const lf_link_ops ops = {NULL, link_config, link_command, link_ack, link_state, NULL};
+    gatt_start(&ops, s_lock);
 
     int trigger_was = 1, reload_was = 1;
     uint32_t last_auto = 0;
     for (;;) {
+        xSemaphoreTake(s_lock, portMAX_DELAY);
         int trig = gpio_get_level(CONFIG_LF_PIN_TRIGGER);
         int rel = gpio_get_level(CONFIG_LF_PIN_RELOAD);
         if (!trig && trigger_was)
-            fire(&rules, &gate);
+            fire(&s_rules, &s_gate);
         if (!rel && reload_was)
-            lf_rules_reload(&rules, now_ms());
+            lf_rules_reload(&s_rules, now_ms());
         trigger_was = trig;
         reload_was = rel;
 #if CONFIG_LF_BENCH_AUTOFIRE
         if (now_ms() - last_auto >= 1000) {
             last_auto = now_ms();
-            fire(&rules, &gate);
+            fire(&s_rules, &s_gate);
         }
 #else
         (void)last_auto;
 #endif
-        lf_rules_tick(&rules, now_ms());
-        lf_emitter_poll(&gate, now_ms());
+        lf_rules_tick(&s_rules, now_ms());
+        lf_emitter_poll(&s_gate, now_ms());
+        xSemaphoreGive(s_lock);
         vTaskDelay(pdMS_TO_TICKS(10)); /* 100 Hz sampling is its own debounce */
     }
 }

@@ -54,3 +54,43 @@ queues an `event` (`lf_evq`, 32 slots).
 - If more than 32 events pile up unacknowledged the oldest is dropped (a
   sustained loss of the link of more than 32 hits; the state message still
   carries the true health).
+
+## Pairing and security (gear side)
+
+- Characteristics that write or read need an encrypted link. The gear pairs
+  with LE Secure Connections, "just works" (no passkey: the gear has no
+  display) and **bonds**, so a phone pairs once and reconnects on its own.
+- A new phone can pair only in the **pairing window**: 60 s after power-up
+  when the gear has no bonded phone, or 60 s after holding the pair button
+  (`LF_PIN_PAIR`, BOOT on the XIAO) for 3 s. Holding it for 10 s forgets all
+  bonded phones. Outside the window an unbonded phone is dropped as soon as the
+  link is encrypted. "Just works" gives no protection against someone nearby
+  who connects inside the window; the window and the button are what keep that
+  to the owner's own gear. The design called for a passkey; the gear cannot
+  show one, so this is the smaller step. A passkey on the phone and LED
+  blinks is possible later if the owner wants it.
+- Up to 4 bonded phones are kept. One phone is connected at a time.
+
+## What each device sends
+
+| | config | command | state | events |
+|---|---|---|---|---|
+| **Vest hub** | applied between matches | start, stop, respawn | health, ammo, flags, battery | hits and downs, with ack/replay |
+| **Blaster** | applied between matches | start, stop | ammo, flags, battery | none (never notifies) |
+
+The device keeps playing with no phone (docs/design.md). While a match is
+active a new `config` is ignored (it applies to the next one); `start` while
+active and `stop` while idle do nothing. `battery_pct` is a constant 100 until
+a voltage divider on an ADC pin is added to the hardware.
+
+## Open question: the blaster does not know the player is down
+
+The hub knows when the player is down; the blaster, a separate board, does not,
+so it would keep firing. With the current commands the phone can only
+`stop` the blaster (which also ends its match and resets ammo on the next
+`start`). Options: (a) add two commands, "disable" and "enable", that the
+phone sends when the hub's `state` shows the player down or alive again (the
+phone relay adds the BLE latency, about 100 ms, during which a downed player
+can still fire); (b) a direct link between the blaster and the vest (more
+firmware, no phone in the loop). Recommendation: (a). Not implemented; it
+needs the owner's decision.

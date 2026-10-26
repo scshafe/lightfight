@@ -59,6 +59,8 @@ A receiver module's output is open-collector-like with an internal pull-up and
 idles high; keep each harness lead short or shielded, as it carries 560 us
 edges.
 
+The pair button is the XIAO's own BOOT button (GPIO9); nothing to wire.
+
 ## Prototype shopping list (2 players, with spares)
 
 | Item | Qty |

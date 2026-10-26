@@ -62,6 +62,13 @@ menu "lightfight"
         default 20
         depends on LF_ROLE_HUB
 
+    config LF_PIN_PAIR
+        int "GPIO of the pair button to ground (BOOT on the XIAO)"
+        default 9
+        help
+            Hold 3 s: a new phone may pair for 60 s. Hold 10 s: forget all
+            paired phones.
+
     config LF_STANDALONE
         bool "Start a match at boot with default rules (bench use, before BLE)"
         default y
