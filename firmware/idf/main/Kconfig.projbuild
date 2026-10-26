@@ -1,0 +1,54 @@
+menu "lightfight"
+
+    choice LF_ROLE
+        prompt "Role of this board"
+        default LF_ROLE_BLASTER
+        config LF_ROLE_BLASTER
+            bool "Blaster (trigger, IR emitter)"
+        config LF_ROLE_HUB
+            bool "Vest hub (IR receivers, haptics)"
+    endchoice
+
+    config LF_PIN_IR_LED
+        int "GPIO driving the IR LED's MOSFET gate (blaster)"
+        default 3
+        help
+            Needs the external gate pull-down (docs/hardware.md).
+
+    config LF_PIN_TRIGGER
+        int "GPIO of the trigger switch to ground (blaster)"
+        default 4
+
+    config LF_PIN_RELOAD
+        int "GPIO of the reload switch to ground (blaster)"
+        default 5
+
+    config LF_PIN_STATUS_LED
+        int "GPIO of the status LED"
+        default 10
+
+    config LF_STANDALONE
+        bool "Start a match at boot with default rules (bench use, before BLE)"
+        default y
+
+    config LF_PLAYER_ID
+        int "Shooter id used while standalone (0..63)"
+        range 0 63
+        default 1
+        depends on LF_STANDALONE
+
+    config LF_TEAM
+        int "Team used while standalone (0..7)"
+        range 0 7
+        default 0
+        depends on LF_STANDALONE
+
+    config LF_BENCH_AUTOFIRE
+        bool "Bench: send one frame per second without the trigger"
+        default n
+        depends on LF_ROLE_BLASTER
+        help
+            For the waveform check in docs/bench.md. The frames still go
+            through the emitter's safety gate; there is no continuous mode.
+
+endmenu

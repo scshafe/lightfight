@@ -3,6 +3,9 @@
 # tests, then each part's tests when the part has them. CI runs the same
 # command. A part joins by adding the file named below; nothing else changes.
 #   firmware/Makefile  -> host tests of the portable C library (make test)
+#   firmware/scripts/idf-build.sh -> compile the ESP-IDF firmware in the
+#                         espressif/idf container; skipped without docker
+#                         (set LF_SKIP_IDF=1 to skip it on purpose)
 #   server/go.mod      -> go vet and go test
 #   ios/Package.swift  -> swift test, only where swift is installed (skipped
 #                         otherwise; CI's runner has none, see ios/README.md)
@@ -14,6 +17,17 @@ python3 -B -m unittest discover -s tests -t . -v
 if [ -f firmware/Makefile ]; then
   echo "== firmware host tests"
   make -C firmware test
+fi
+
+if [ -f firmware/scripts/idf-build.sh ]; then
+  if [ "${LF_SKIP_IDF:-0}" = 1 ]; then
+    echo "== firmware ESP-IDF build skipped: LF_SKIP_IDF=1"
+  elif docker info >/dev/null 2>&1; then
+    echo "== firmware ESP-IDF build"
+    firmware/scripts/idf-build.sh
+  else
+    echo "== firmware ESP-IDF build skipped: docker is not available"
+  fi
 fi
 
 if [ -f server/go.mod ]; then
