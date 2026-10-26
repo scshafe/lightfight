@@ -38,9 +38,9 @@ pull-down before going on.
 Put a 1 ohm shunt in the LED's ground leg (between MOSFET source and ground)
 and an oscilloscope across it, or a multimeter in series for the average.
 
-1. Flash the blaster with `LF_BENCH_AUTOFIRE` (menuconfig: lightfight > Bench:
-   send one frame per second). It sends one frame a second through the safety
-   gate.
+1. Flash the `blaster-bench` role (`firmware/scripts/idf-flash.sh blaster-bench
+   /dev/ttyACM0`): the blaster with `LF_BENCH_AUTOFIRE`, one frame a second
+   through the safety gate, no trigger needed.
 2. Read the peak current in the marks: **must be no more than the LED's
    continuous rating** (the resistor was sized for it; docs/hardware.md).
 3. Read the average over a second: it is the peak times the carrier duty (33%)
@@ -68,7 +68,7 @@ output to the PR.
 
 ## B4 - trigger, ammo, reload (no AUTOFIRE)
 
-Rebuild without `LF_BENCH_AUTOFIRE`. Pull the trigger once per second for
+Flash the plain `blaster` role (no autofire). Pull the trigger once per second for
 thirty shots: the monitor logs each shot with a rising seq (wrapping at 16)
 and the ammo going from 29 to 0; the 31st pull logs "no shot". Press reload
 and wait 2 s: ammo is 30 again. Holding the trigger fires one shot, not a
