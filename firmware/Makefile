@@ -12,7 +12,7 @@ test: $(TESTS)
 
 $(BUILD)/%: tests/%.c $(LIB) $(wildcard lib/*.h) tests/lf_test.h
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -DVECTORS='"$(CURDIR)/../protocol/ir-vectors.csv"' -o $@ $< $(LIB)
+	$(CC) $(CFLAGS) -DVECTORS='"$(CURDIR)/../protocol/ir-vectors.csv"' -DBLE_VECTORS='"$(CURDIR)/../protocol/ble-vectors.csv"' -o $@ $< $(LIB)
 
 clean:
 	rm -rf $(BUILD)
