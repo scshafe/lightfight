@@ -53,6 +53,14 @@ static int link_command(void *c, uint8_t cmd, uint32_t ms)
         lf_rules_stop(&s_rules);
         return 1;
     }
+    if (cmd == LF_CMD_DISABLE && s_rules.active) { /* the player is down (relayed by the phone) */
+        s_rules.disabled = true;
+        return 1;
+    }
+    if (cmd == LF_CMD_ENABLE && s_rules.active) {
+        s_rules.disabled = false;
+        return 1;
+    }
     return 0;
 }
 
@@ -63,7 +71,7 @@ static void link_state(void *c, lf_ble_state *s)
 {
     (void)c;
     s->flags = (uint8_t)((s_rules.active ? LF_STATE_ACTIVE : 0) | (s_rules.alive ? LF_STATE_ALIVE : 0) |
-                         (s_rules.reloading ? LF_STATE_RELOADING : 0));
+                         (s_rules.reloading ? LF_STATE_RELOADING : 0) | (s_rules.disabled ? LF_STATE_DISABLED : 0));
     s->health = s_rules.health;
     s->ammo = s_rules.ammo;
     s->battery_pct = 100;

@@ -156,6 +156,7 @@ static void test_commands_and_config(void)
     CHECK(lf_hub_command(&h, LF_CMD_START, 0) == 1);
     CHECK(h.rules.health == 50 && h.rules.active);
     CHECK(lf_hub_command(&h, LF_CMD_START, 0) == 0); /* already running */
+    CHECK(lf_hub_command(&h, LF_CMD_DISABLE, 0) == 0 && lf_hub_command(&h, LF_CMD_ENABLE, 0) == 0); /* blaster-only */
     bc.player = 9;
     lf_hub_apply_config(&h, &bc); /* ignored mid-match */
     CHECK(h.rules.cfg.player == 7);

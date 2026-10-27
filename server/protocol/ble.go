@@ -24,6 +24,7 @@ const (
 	StateActive    = 1
 	StateAlive     = 2
 	StateReloading = 4
+	StateDisabled  = 8
 )
 
 // Event kinds.
@@ -38,6 +39,8 @@ const (
 	CmdStop    = 2
 	CmdRespawn = 3
 	CmdPing    = 4
+	CmdDisable = 5
+	CmdEnable  = 6
 )
 
 var (
@@ -121,7 +124,7 @@ func DecodeConfig(b []byte) (Config, error) {
 }
 
 func (s State) Encode() ([]byte, error) {
-	if s.Flags > 7 || s.BatteryPct > 100 {
+	if s.Flags > 15 || s.BatteryPct > 100 {
 		return nil, ErrRange
 	}
 	b := make([]byte, StateLen)
@@ -137,7 +140,7 @@ func DecodeState(b []byte) (State, error) {
 	if err := check(b, StateLen); err != nil {
 		return s, err
 	}
-	if b[1] > 7 || b[6] > 100 {
+	if b[1] > 15 || b[6] > 100 {
 		return s, ErrRange
 	}
 	s.Flags, s.BatteryPct = b[1], b[6]
@@ -190,7 +193,7 @@ func DecodeAck(b []byte) (uint16, error) {
 }
 
 func EncodeCommand(cmd uint8) ([]byte, error) {
-	if cmd < CmdStart || cmd > CmdPing {
+	if cmd < CmdStart || cmd > CmdEnable {
 		return nil, ErrRange
 	}
 	return []byte{Version, cmd}, nil
@@ -200,7 +203,7 @@ func DecodeCommand(b []byte) (uint8, error) {
 	if err := check(b, CommandLen); err != nil {
 		return 0, err
 	}
-	if b[1] < CmdStart || b[1] > CmdPing {
+	if b[1] < CmdStart || b[1] > CmdEnable {
 		return 0, ErrRange
 	}
 	return b[1], nil

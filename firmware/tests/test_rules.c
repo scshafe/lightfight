@@ -18,6 +18,22 @@ static lf_ir_frame shot(uint8_t shooter, uint8_t team, uint8_t dmg, uint8_t seq)
     return f;
 }
 
+static void test_disabled(void)
+{
+    lf_rules r = make(3, 1, 0);
+    lf_ir_frame f;
+    r.disabled = true;
+    CHECK(lf_rules_trigger(&r, 0, &f) == LF_SHOT_DISABLED);
+    CHECK(r.ammo == r.cfg.magazine); /* no round is spent */
+    r.ammo = 5;
+    CHECK(!lf_rules_reload(&r, 0));
+    r.disabled = false;
+    CHECK(lf_rules_trigger(&r, 0, &f) == LF_SHOT_OK);
+    r.disabled = true;
+    lf_rules_start(&r, 1000); /* a new match starts enabled */
+    CHECK(!r.disabled);
+}
+
 static void test_trigger_rules(void)
 {
     lf_rules r = make(3, 1, 0);
@@ -171,6 +187,7 @@ static void test_end_to_end_with_codec(void)
 int main(void)
 {
     test_trigger_rules();
+    test_disabled();
     test_ammo_and_reload();
     test_inactive();
     test_hit_and_down_and_respawn();

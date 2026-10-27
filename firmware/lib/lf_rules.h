@@ -35,6 +35,7 @@ typedef struct {
     lf_rules_config cfg;
     bool active;                    /* a match is running */
     bool alive;
+    bool disabled;                  /* an outside source (the phone) switched the trigger off */
     uint16_t health;
     uint16_t ammo;
     bool reloading;
@@ -59,6 +60,7 @@ typedef enum {
     LF_SHOT_OK = 0,
     LF_SHOT_INACTIVE,
     LF_SHOT_DEAD,
+    LF_SHOT_DISABLED,
     LF_SHOT_RELOADING,
     LF_SHOT_NO_AMMO,
     LF_SHOT_RATE_LIMITED

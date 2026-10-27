@@ -155,7 +155,7 @@ func TestBLERejects(t *testing.T) {
 	if _, err := DecodeConfig(cfg); err != ErrRange {
 		t.Errorf("player: %v", err)
 	}
-	if _, err := DecodeState([]byte{1, 8, 0, 0, 0, 0, 0}); err != ErrRange {
+	if _, err := DecodeState([]byte{1, 16, 0, 0, 0, 0, 0}); err != ErrRange {
 		t.Errorf("state flags: %v", err)
 	}
 	if _, err := DecodeState([]byte{1, 0, 0, 0, 0, 0, 101}); err != ErrRange {
@@ -164,7 +164,7 @@ func TestBLERejects(t *testing.T) {
 	if _, err := DecodeEvent([]byte{1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}); err != ErrRange {
 		t.Errorf("kind: %v", err)
 	}
-	if _, err := DecodeCommand([]byte{1, 5}); err != ErrRange {
+	if _, err := DecodeCommand([]byte{1, 7}); err != ErrRange {
 		t.Errorf("command: %v", err)
 	}
 	if _, err := EncodeCommand(0); err != ErrRange {

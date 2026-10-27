@@ -15,9 +15,10 @@
 #define LF_BLE_ACK_LEN 3
 #define LF_BLE_COMMAND_LEN 2
 
-enum { LF_STATE_ACTIVE = 1, LF_STATE_ALIVE = 2, LF_STATE_RELOADING = 4 };
+enum { LF_STATE_ACTIVE = 1, LF_STATE_ALIVE = 2, LF_STATE_RELOADING = 4, LF_STATE_DISABLED = 8 };
 enum { LF_EVENT_HIT = 1, LF_EVENT_DOWN = 2 };
-enum { LF_CMD_START = 1, LF_CMD_STOP = 2, LF_CMD_RESPAWN = 3, LF_CMD_PING = 4 };
+enum { LF_CMD_START = 1, LF_CMD_STOP = 2, LF_CMD_RESPAWN = 3, LF_CMD_PING = 4,
+       LF_CMD_DISABLE = 5, LF_CMD_ENABLE = 6 };
 
 typedef struct {
     uint8_t player, team, damage_code;

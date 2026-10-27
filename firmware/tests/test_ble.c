@@ -110,7 +110,7 @@ static void test_rejects(void)
     CHECK(!lf_ble_decode_config(b, LF_BLE_CONFIG_LEN, &c)); /* player */
     b[1] = 0; b[4] = 2;
     CHECK(!lf_ble_decode_config(b, LF_BLE_CONFIG_LEN, &c)); /* flag */
-    uint8_t st[LF_BLE_STATE_LEN] = {1, 8, 0, 0, 0, 0, 0};
+    uint8_t st[LF_BLE_STATE_LEN] = {1, 16, 0, 0, 0, 0, 0};
     CHECK(!lf_ble_decode_state(st, sizeof st, &s));
     st[1] = 0; st[6] = 101;
     CHECK(!lf_ble_decode_state(st, sizeof st, &s));
@@ -120,7 +120,7 @@ static void test_rejects(void)
     CHECK(!lf_ble_decode_event(ev, sizeof ev, &e)); /* seq */
     uint8_t ak[2] = {1, 0};
     CHECK(!lf_ble_decode_ack(ak, 2, &id));
-    uint8_t cm[2] = {1, 5};
+    uint8_t cm[2] = {1, 7};
     CHECK(!lf_ble_decode_command(cm, 2, &cmd));
     cm[1] = 0;
     CHECK(!lf_ble_decode_command(cm, 2, &cmd));

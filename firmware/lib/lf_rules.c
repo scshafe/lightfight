@@ -34,6 +34,7 @@ void lf_rules_start(lf_rules *r, uint32_t now_ms)
     (void)now_ms;
     r->active = true;
     r->alive = true;
+    r->disabled = false;
     r->health = r->cfg.max_health;
     r->ammo = r->cfg.magazine;
     r->reloading = false;
@@ -54,6 +55,8 @@ lf_shot_result lf_rules_trigger(lf_rules *r, uint32_t now_ms, lf_ir_frame *frame
         return LF_SHOT_INACTIVE;
     if (!r->alive)
         return LF_SHOT_DEAD;
+    if (r->disabled)
+        return LF_SHOT_DISABLED;
     if (r->reloading)
         return LF_SHOT_RELOADING;
     if (r->ammo == 0)
@@ -73,7 +76,7 @@ lf_shot_result lf_rules_trigger(lf_rules *r, uint32_t now_ms, lf_ir_frame *frame
 
 bool lf_rules_reload(lf_rules *r, uint32_t now_ms)
 {
-    if (!r->active || !r->alive || r->reloading || r->ammo >= r->cfg.magazine)
+    if (!r->active || !r->alive || r->disabled || r->reloading || r->ammo >= r->cfg.magazine)
         return false;
     r->reloading = true;
     r->reload_done_ms = now_ms + r->cfg.reload_ms;
