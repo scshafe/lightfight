@@ -23,6 +23,7 @@ FRAME_TIMINGS = 51
 CARRIER_TOL = 0.02
 MARK_TOL = 0.10
 MAX_DUTY = 0.50
+DUTY_TOL = 0.02  # the narrow LED runs at 50%; sampling at 1-8 MS/s reads it a little high
 MIN_INTERVAL_S = 0.250
 
 
@@ -136,7 +137,7 @@ def analyze(text):
         good = near(f, CARRIER_HZ, CARRIER_TOL)
         lines.append(f"carrier {f:.0f} Hz ({'ok' if good else 'FAIL, expected 38000'})")
         ok &= good
-        good = duty <= MAX_DUTY
+        good = duty <= MAX_DUTY + DUTY_TOL
         lines.append(f"carrier duty {duty * 100:.0f}% ({'ok' if good else 'FAIL, budget assumes <= 50%'})")
         ok &= good
     else:

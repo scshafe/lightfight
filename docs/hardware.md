@@ -9,30 +9,58 @@ materials") fixes the shape, not the part.
 
 - **Board:** Seeed XIAO ESP32-C3. It has a LiPo charger on board (battery on
   the BAT pads, charge over USB-C), so no separate charger module.
-- **Emitter:** one 940 nm 5 mm IR LED (candidate: Vishay TSAL6200) switched by
-  a logic-level N-MOSFET (candidate: AO3400A or IRLML6344, Vgs(th) well below
-  3.3 V), the LED on the battery rail through a series resistor:
+- **Emitter:** one 940 nm 5 mm IR LED (candidate: Vishay TSAL6200) behind a
+  lens (below), switched by a logic-level N-MOSFET (candidate: AO3400A or
+  IRLML6344, Vgs(th) well below 3.3 V), the LED on the battery rail through a
+  series resistor. It is driven at about 200 mA peak, the TSAL6200's
+  repetitive-pulse rating at 50% duty (pulses under 100 us), which the 38 kHz
+  carrier at 50% duty gives (13 us pulses); the firmware sets that duty for this
+  LED (`NARROW_CARRIER_DUTY_PERCENT` in `blaster.c`). Never exceed it.
 
   ```
-  BAT+ --[R_led]--|>|-- LED anode..cathode --+-- MOSFET drain
-                                             MOSFET source -- GND
+  BAT+ --+--[R_led 15 R]--|>|-- LED anode..cathode --+-- MOSFET drain
+         +-- 100 uF + 100 nF to GND, close to the resistor   MOSFET source -- GND
   GPIO(LF_PIN_IR_LED) --[100 R]-- MOSFET gate --+-- [100 k] -- GND   (gate pull-down)
   ```
 
   The 100 k pull-down keeps the LED off while the MCU is in reset or booting;
-  it is part of the safety design and is checked in the bench procedure.
-- **Resistor:** size it for the *highest* battery voltage so the current never
-  exceeds the LED's continuous rating, then check the lowest voltage still
-  gives enough range:
+  it is part of the safety design and is checked in the bench procedure. The
+  100 uF capacitor supplies the 200 mA pulses so the cell and the wiring do not
+  sag at 38 kHz.
+- **Resistor:** size it for the *highest* battery voltage and the *lowest* V_f
+  so the peak never exceeds the repetitive-pulse rating, then check the lowest
+  battery voltage still gives enough range:
 
-  `R_led = (V_batt_max - V_f - V_ds_on) / I_max`
+  `R_led = (V_batt_max - V_f_min - V_ds_on) / I_peak_max`
 
-  Example with a 100 mA continuous rating, V_f about 1.4 V at 100 mA,
-  V_ds_on about 0.1 V and V_batt_max = 4.2 V: R is at least 27 ohm (1/4 W; at
-  the 4% duty it dissipates a small fraction of that). At 3.3 V the same
-  resistor gives about 60 mA. These figures come from my reading of typical
-  datasheet values; **recompute them from the datasheet of the part actually
-  bought and confirm by measurement** (bench step B2).
+  With I_peak_max 200 mA, V_f_min about 1.3 V, V_ds_on about 0.1 V and
+  V_batt_max = 4.2 V: R is at least 14 ohm; use **15 ohm, 1%, 1/4 W** (it
+  dissipates about 0.6 W for 13 us pulses, 3.4% of the time, so about 20 mW
+  mean). With V_f about 1.45 V this gives about 177 mA at 4.2 V and about
+  120 mA at 3.3 V, the worst case 193 mA at 4.25 V with the lowest V_f. 13 ohm
+  gives exactly 200 mA typical and exceeds the rating at the corners: do not
+  use it. Intensity is roughly proportional to current, so the range falls as
+  the cell drains (docs/design.md, "Optics"). These figures come from my
+  reading of typical datasheet values; **recompute them from the datasheet of
+  the part actually bought and confirm by measurement** (bench steps B2, B11).
+- **Lens and tube (owner decision 2026-10-27):** a 40 mm diameter lens of about
+  50 mm focal length, PMMA asphere or Fresnel, with the LED at the focus on
+  the lens axis, 50 mm behind the lens (a Fresnel's focal length is set by its
+  maker; use the datasheet's value). The aperture sets the range (intensity
+  grows with its area) and the focal length sets the cone width. The tube:
+  - printed in an opaque material, inside diameter 40 mm, matte black (flat
+    black paint or flocking), about 50 mm long;
+  - 2 or 3 baffle rings with a 36 mm bore inside the tube, so light from the
+    LED that misses the lens is absorbed instead of bouncing out, and a
+    retaining ring that seals the lens edge, so no light leaves except through
+    the lens;
+  - the LED holder slides about 5 mm along the axis and locks, to focus on the
+    bench (B11), and the LED's leads exit through a sealed back plate;
+  - a lens cap. The lens focuses sunlight to a hot spot at the LED and can melt
+    it or the tube: never leave the blaster uncapped in the sun. Wear and
+    store it with the cap on;
+  - the shotgun's wide LED sits on the outside of the housing, beside the tube,
+    not behind the lens.
 - **Shotgun emitter:** a second 940 nm LED, wide-angle (5 mm, half-angle
   45-60 degrees on the datasheet, no lens; candidate: a TSAL4400-class part or
   any 940 nm LED whose datasheet gives a half-angle of 45 degrees or more),
@@ -124,10 +152,10 @@ The pair button is the XIAO's own BOOT button (GPIO9); nothing to wire.
 | Seeed XIAO ESP32-C3 | 6 |
 | 1S LiPo 3.7 V, 1000-1500 mAh, with protection circuit and connector | 5 |
 | Resettable fuse / PTC, about 1 A hold | 5 |
-| 940 nm IR LED, 5 mm (TSAL6200 or equivalent) | 6 |
+| 940 nm IR LED, 5 mm (TSAL6200 or equivalent; needs 200 mA repetitive-pulse rating at 50% duty) | 6 |
 | 940 nm IR LED, 5 mm, wide-angle (half-angle 45 degrees or more) for the shotgun | 4 |
 | Logic-level N-MOSFET, SOT-23 (AO3400A or equivalent) | 12 |
-| Resistors: 27 ohm 1/4 W; 100 ohm; 100 k; 330 ohm (a handful of each, 10 per value) | |
+| Resistors: 15 ohm 1% 1/4 W (the main LED); 100 ohm; 100 k; 330 ohm (a handful of each, 10 per value) | |
 | Resistors 220 k (battery divider: 2 per board, so 12) | 14 |
 | Resistors 47, 68, 100, 150, 220, 330 ohm 1/4 W, 4 of each (tuning the shotgun LED's range) | 24 |
 | Resistor 10 k (trigger C pull-up; the gate pull-downs of the new MOSFETs use the 100 k) | 4 |
@@ -135,6 +163,9 @@ The pair button is the XIAO's own BOOT button (GPIO9); nothing to wire.
 | Capacitors, 100 nF ceramic (receivers and battery sense) | 20 |
 | Tact switches (per blaster: A, B, C, reload; plus spares) | 14 |
 | Coin vibration motor 3 V, with 1N4148 diode and a spare MOSFET each (vest and headband: 2 per player, plus a spare) | 5 |
+| Lens, 40 mm diameter, about 50 mm focal length, PMMA asphere or Fresnel (1 per blaster plus 2 spares; pick one with a datasheet focal length) | 4 |
+| Matte black paint or flocking, a few mm of M3 hardware and PETG or similar opaque filament for the tube, baffles and cap | 1 set |
+| Electrolytic or polymer capacitor, 100 uF 10 V (the LED supply) | 6 |
 | Piezo buzzer, 3 V (the hub's, a plain buzzer element) | 3 |
 | Passive piezo element for the blaster's sound (needs a tone) | 3 |
 | LEDs for status, 3 mm | 6 |

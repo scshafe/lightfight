@@ -41,14 +41,19 @@ and an oscilloscope across it, or a multimeter in series for the average.
 1. Flash the `blaster-bench` role (`firmware/scripts/idf-flash.sh blaster-bench
    /dev/ttyACM0`): the blaster with `LF_BENCH_AUTOFIRE`, one frame a second
    through the safety gate, no trigger needed.
-2. Read the peak current in the marks: **must be no more than the LED's
-   continuous rating** (the resistor was sized for it; docs/hardware.md).
-3. Read the average over a second: it is the peak times the carrier duty (33%)
-   times the mark fraction of the frame; expect under 3% of the peak.
+2. Read the peak current in the marks. For the main (lensed) LED **it must be
+   no more than 200 mA, its repetitive-pulse rating at 50% duty**, and the
+   mean over a mark (peak times the carrier duty) no more than its 100 mA
+   continuous rating; expect about 177 mA at 4.2 V with the 15 ohm resistor
+   (docs/hardware.md). The wide LED is checked in B10.
+3. Read the average over a second: it is the peak times the carrier duty (50%
+   for the main LED) times the mark fraction of the frame; expect about 3.4%
+   of the peak with four shots a second, and under 2% with one a second.
 4. Repeat with the battery fully charged (4.2 V) and at about 3.3 V.
 
 Record the three numbers and the battery voltages. Fail if the peak exceeds
-the rating at 4.2 V: use a bigger resistor.
+200 mA at 4.2 V: use a bigger resistor. The carrier duty in the capture (B3)
+reads 50%, within the tool's 2% tolerance.
 
 ## B3 - waveform
 
@@ -246,6 +251,54 @@ goal is a frame that decodes at 3-5 m across a wide cone and not beyond.
    each angle. Two vests side by side 1 m apart at 3 m must both register one
    shot as one hit each.
 5. Aimed away and at the ceiling: zero hits, as in B7.
+
+## B11 - the lensed blaster's range and cone
+
+Owner decision 2026-10-27. The goal: 75 m feasible and 50 m reliable outdoors.
+Needs the blaster with the lens and tube fitted (docs/hardware.md), the cap
+off, an open site with a straight line of 75 m, two hubs (or one hub moved
+between runs), a 100 m tape or a rangefinder, and a sunny day with some shade.
+Sun hoods and a back sensor are not part of this build, so run it as built.
+
+1. Focus: with the `blaster-bench` role flashed (B2, one frame a second) and a
+   hub 25 m away facing the blaster, slide the LED holder in 1 mm steps and
+   note the hit rate; lock it where the hit rate and the cone are best. Check
+   by eye (phone camera) that no glow leaks from the tube sides or the
+   back: if any does, fix the baffle or the seal before going on. Record the
+   position.
+2. Range. Distances 10, 25, 50 and 75 m. Conditions, each at every distance:
+   - **sun, sun-facing receiver**: a clear sky, the hub's receivers facing
+     the sun (the blaster fires toward it);
+   - **sun, shaded receiver**: the same sky, the hub's receivers in shade
+     (a hood-free vest in a shadow, or the hub turned away from the sun);
+   - **shade**: overcast or building shade over both ends;
+   - **dark**: after dusk.
+   Per distance and condition fire 30 shots about a second apart, aimed at the
+   vest on the axis, with the logs saved, and score each with
+   `python3 tools/lfhits.py --expect hit blaster.log hub.log`. Note the sky
+   and the sun's bearing, the time, the battery voltage at the start and end
+   (B9), and any `stuck` in the `rx` lines. Repeat the 50 and 75 m runs with
+   the cell at about 3.6 V (use a part-drained cell).
+3. Cone width. At 50 m (sun, sun-facing receiver) and at 75 m move the vest
+   sideways in 0.5 m steps, still facing the blaster, and record the hit rate
+   at each offset until it falls below 10%. Report the width where it is 95%
+   and where it is 50%.
+4. Aimed away and at the sky: zero hits, as in B7. Fire 50 shots at each.
+5. Fill in the table below, in the PR that reports it, with the `lfhits.py` outputs attached. The pass criteria
+   (owner's goal): at least 95% hits at 50 m in every condition on the axis,
+   and at least one run at 75 m with the rate above 50%. Anything below it is
+   a finding for the optics, not a firmware failure: report the numbers and
+   the focus position, and say which of lens, focus, current and
+   threshold explains the gap.
+
+| Distance | Condition | Receiver | Cell V | Shots | Counted | Hit rate | Cone 95% / 50% width |
+|----------|-----------|----------|--------|-------|---------|----------|----------------------|
+| 10 m | sun | sun-facing | | | | | |
+| 10 m | sun | shaded | | | | | |
+
+(one row per distance 10, 25, 50 and 75 m and per condition above, plus the 3.6 V
+repeats; the model predicts about 6 dB of margin at 50 m and 3 dB
+at 75 m with a sun-facing receiver at 4.2 V.)
 
 ## Records
 
