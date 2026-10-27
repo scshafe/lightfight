@@ -80,6 +80,7 @@ static void output_pin(int pin)
 void hub_run(void)
 {
     output_pin(CONFIG_LF_PIN_HAPTIC);
+    output_pin(CONFIG_LF_PIN_HAPTIC_HEAD);
     output_pin(CONFIG_LF_PIN_BUZZER);
     output_pin(CONFIG_LF_PIN_STATUS_LED);
 
@@ -107,8 +108,7 @@ void hub_run(void)
     }
     ESP_LOGI(TAG, "hub up: player %d team %d", CONFIG_LF_PLAYER_ID, CONFIG_LF_TEAM);
 
-    uint32_t haptic_off_ms = 0, last_counters_ms = 0, last_dropped = 0;
-    int haptic_on = 0;
+    uint32_t last_counters_ms = 0, last_dropped = 0;
     for (;;) {
         xSemaphoreTake(s_lock, portMAX_DELAY);
         while (s_tail != s_head) {
@@ -116,19 +116,12 @@ void hub_run(void)
             s_tail = (s_tail + 1) % RING;
             lf_hub_edge(&s_hub, e.sensor, e.level, e.t_us);
         }
-        lf_hub_poll_result r = lf_hub_poll(&s_hub, now_us());
+        lf_hub_poll(&s_hub, now_us());
         uint32_t ms = now_us() / 1000;
-        if (r.hits) {
-            haptic_on = 1;
-            haptic_off_ms = ms + (r.downs ? 600 : 150);
-            gpio_set_level(CONFIG_LF_PIN_HAPTIC, 1);
-            gpio_set_level(CONFIG_LF_PIN_BUZZER, r.downs ? 1 : 0);
-        }
-        if (haptic_on && (int32_t)(ms - haptic_off_ms) >= 0) {
-            haptic_on = 0;
-            gpio_set_level(CONFIG_LF_PIN_HAPTIC, 0);
-            gpio_set_level(CONFIG_LF_PIN_BUZZER, 0);
-        }
+        uint8_t out = lf_hub_outputs(&s_hub, ms); /* the cue patterns are lib data (lf_haptic.c) */
+        gpio_set_level(CONFIG_LF_PIN_HAPTIC, out & LF_OUT_VEST ? 1 : 0);
+        gpio_set_level(CONFIG_LF_PIN_HAPTIC_HEAD, out & LF_OUT_HEAD ? 1 : 0);
+        gpio_set_level(CONFIG_LF_PIN_BUZZER, out & LF_OUT_BUZZER ? 1 : 0);
         gpio_set_level(CONFIG_LF_PIN_STATUS_LED, s_hub.rules.alive ? 1 : 0);
         if (ms - last_counters_ms >= 10000) {
             last_counters_ms = ms;

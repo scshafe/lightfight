@@ -24,12 +24,26 @@ void lf_hub_edge(lf_hub *h, int sensor, int level, uint32_t t_us)
         lf_rx_edge(&h->chan[sensor], level, t_us);
 }
 
+uint8_t lf_hub_sensor_zone(int sensor) { return sensor >= 3 ? LF_ZONE_HEAD : LF_ZONE_VEST; }
+
+static void flush_pending(lf_hub *h)
+{
+    if (!h->pending.valid)
+        return;
+    uint8_t zone = (h->pending.zones & LF_ZONE_HEAD) ? LF_ZONE_HEAD : LF_ZONE_VEST;
+    lf_haptic_start(&h->haptic, h->pending.cue, zone, h->pending.due_ms);
+    h->pending.valid = false;
+}
+
 static void on_frame(lf_hub *h, int sensor, const lf_ir_frame *f, uint32_t now_ms, lf_hub_poll_result *r)
 {
     h->frames_read[sensor]++;
     lf_hit hit = lf_rules_on_frame(&h->rules, now_ms, f);
     lf_log_entry e = {.t_ms = now_ms, .sensor = sensor, .frame = *f};
     if (hit.kind == LF_HIT_NONE) {
+        if (hit.reason == LF_IGNORE_DUPLICATE && h->pending.valid && h->pending.shooter == f->shooter &&
+            h->pending.seq == f->seq)
+            h->pending.zones |= lf_hub_sensor_zone(sensor); /* the same shot, seen elsewhere */
         e.kind = LF_LOG_DROP;
         e.reason = hit.reason;
         emit(h, &e);
@@ -45,8 +59,17 @@ static void on_frame(lf_hub *h, int sensor, const lf_ir_frame *f, uint32_t now_m
     };
     lf_evq_push(&h->events, &ev);
     r->hits++;
-    if (hit.kind == LF_HIT_DOWN)
+    flush_pending(h); /* an earlier hit still waiting */
+    if (hit.kind == LF_HIT_DOWN) {
         r->downs++;
+        lf_haptic_start(&h->haptic, LF_CUE_DOWN, 0, now_ms); /* both motors: no zone to settle */
+    } else {
+        h->pending = (lf_hub_pending_cue){
+            .valid = true, .zones = lf_hub_sensor_zone(sensor), .shooter = f->shooter, .seq = f->seq,
+            .cue = lf_haptic_classify_hit(hit.full_damage, h->rules.cfg.max_health),
+            .due_ms = now_ms + LF_HUB_ZONE_SETTLE_MS,
+        };
+    }
     e.kind = LF_LOG_HIT;
     e.damage = hit.damage;
     e.health = hit.health_after;
@@ -57,7 +80,8 @@ lf_hub_poll_result lf_hub_poll(lf_hub *h, uint32_t now_us)
 {
     lf_hub_poll_result r = {0, 0};
     uint32_t now_ms = now_us / 1000;
-    lf_rules_tick(&h->rules, now_ms);
+    if (lf_rules_tick(&h->rules, now_ms).respawned)
+        lf_haptic_start(&h->haptic, LF_CUE_RESPAWN, 0, now_ms);
     for (int s = 0; s < LF_HUB_SENSORS; s++) {
         lf_rx_chan *c = &h->chan[s];
         if (lf_rx_poll(c, now_us) != LF_RX_BURST)
@@ -75,8 +99,12 @@ lf_hub_poll_result lf_hub_poll(lf_hub *h, uint32_t now_us)
             emit(h, &e);
         }
     }
+    if (h->pending.valid && (int32_t)(now_ms - h->pending.due_ms) >= 0)
+        flush_pending(h);
     return r;
 }
+
+uint8_t lf_hub_outputs(lf_hub *h, uint32_t now_ms) { return lf_haptic_outputs(&h->haptic, now_ms); }
 
 void lf_hub_apply_config(lf_hub *h, const lf_ble_config *c)
 {
@@ -93,12 +121,15 @@ int lf_hub_command(lf_hub *h, uint8_t cmd, uint32_t now_ms)
         if (h->rules.active)
             return 0;
         lf_evq_init(&h->events);
+        lf_haptic_stop(&h->haptic);
         lf_rules_start(&h->rules, now_ms);
         return 1;
     case LF_CMD_STOP:
         if (!h->rules.active)
             return 0;
         lf_rules_stop(&h->rules);
+        lf_haptic_stop(&h->haptic);
+        h->pending.valid = false;
         return 1;
     case LF_CMD_RESPAWN:
         if (!h->rules.active || h->rules.alive)

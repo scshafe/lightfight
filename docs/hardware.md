@@ -83,15 +83,34 @@ materials") fixes the shape, not the part.
 XIAO ESP32-C3 again; five 38 kHz receiver modules (TSOP38238 class, 3.3 V),
 each with its own 100 nF decoupling capacitor and a 100 ohm series resistor
 in the supply, on a wired harness (chest, left and right shoulder, two on the
-headband); a coin vibration motor behind a MOSFET with a flyback diode; a
-buzzer; status LEDs. Same battery arrangement as the blaster.
+headband); two coin vibration motors, one in the vest and one in the headband,
+each behind its own MOSFET with a flyback diode; a buzzer; status LEDs. Same
+battery arrangement as the blaster.
+
+The motors, vest and headband alike:
+
+```
+  BAT+ (or 3.3 V for a 3 V coin motor) --+-- motor --+-- MOSFET drain
+                                         |           |
+                                         +-|<|-------+      (1N4148 or a Schottky, cathode to supply)
+  GPIO --[100 R]-- gate --+-- [100 k] -- GND ; source to GND
+```
+
+A coin motor is rated about 3 V, so run it from the 3.3 V rail (about 60-80 mA
+while running, well inside what a MOSFET and the regulator carry for pulses
+of 0.06-1.4 s), or from the cell through a small series resistor. The gate
+pull-down keeps both motors off at reset. A headshot buzzes the headband motor
+only, a body shot the vest motor only; the kill and the respawn buzz both
+(docs/design.md, "Haptics"). Mount the headband motor in its pocket against the
+webbing, not on the skull's bone, so the cue is felt, not painful.
 
 Hub pins (defaults in `Kconfig.projbuild`, XIAO labels): receivers on GPIO3,
-GPIO2, GPIO5, GPIO6, GPIO7 (chest, left shoulder, right shoulder, headband
-front, headband back; GPIO2 is a strapping pin that must be high at reset, which
-a receiver's idle-high output is), battery sense GPIO4 (D2, same divider as the
+GPIO2, GPIO8, GPIO6, GPIO7 (chest, left shoulder, right shoulder, headband
+front, headband back; GPIO2 and GPIO8 are strapping pins that must be high at
+reset, which a receiver's idle-high output is), battery sense GPIO4 (D2, same divider as the
 blaster),
-vibration motor gate GPIO21 (D6), buzzer GPIO20 (D7), status LED GPIO10 (D10).
+vest motor gate GPIO21 (D6), headband motor gate GPIO5 (D3), buzzer GPIO20 (D7),
+status LED GPIO10 (D10).
 A receiver module's output is open-collector-like with an internal pull-up and
 idles high; keep each harness lead short or shielded, as it carries 560 us
 edges.
@@ -115,7 +134,7 @@ The pair button is the XIAO's own BOOT button (GPIO9); nothing to wire.
 | 38 kHz IR receiver module, TSOP38238 class | 14 |
 | Capacitors, 100 nF ceramic (receivers and battery sense) | 20 |
 | Tact switches (per blaster: A, B, C, reload; plus spares) | 14 |
-| Coin vibration motor 3 V, with 1N4148 diode and a spare MOSFET each | 3 |
+| Coin vibration motor 3 V, with 1N4148 diode and a spare MOSFET each (vest and headband: 2 per player, plus a spare) | 5 |
 | Piezo buzzer, 3 V (the hub's, a plain buzzer element) | 3 |
 | Passive piezo element for the blaster's sound (needs a tone) | 3 |
 | LEDs for status, 3 mm | 6 |

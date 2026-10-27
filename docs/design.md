@@ -154,6 +154,35 @@ still one frame, so the vest, the hit log and the server need no change.
   sound table is one line per mode in `firmware/idf/main/blaster.c`. A piezo
   on the blaster is a passive one driven with a tone (LEDC), not the vest's.
 
+## Haptics
+
+Owner decision of 2026-10-26: the vest tells the player what happened with
+distinct vibration patterns, two coin motors (vest and headband), both driven
+by the hub. A headshot buzzes the headband and a body shot the vest; the kill
+and the respawn buzz both. The patterns are plain data in
+`firmware/lib/lf_haptic.c`, and the logic that picks them is in the portable
+library with host tests (`test_haptic`, `test_hub`).
+
+| Cue | When | Motors | Pattern |
+|-----|------|--------|---------|
+| Light hit | counted hit, damage under 30% of max health (the 10 hp light shot) | the zone hit | one tick, 60 ms |
+| Heavy hit | counted hit, damage at least 30% of max health (the 50 hp heavy shot, the 34 hp shotgun) | the zone hit | one buzz, 250 ms |
+| Killed | the hit that takes health to 0 | both, plus the hub buzzer | 300 on, 100 off, 300 on, 100 off, 600 on |
+| Respawn | the player is alive again | both | double tap: 80 on, 80 off, 80 on |
+
+- **Zones:** sensors on the vest (chest, both shoulders) are body, the two
+  headband sensors are head. One shot is read by several sensors and counts
+  once (the first to decode it); to decide the zone anyway the cue waits 15 ms
+  for the others, and if any headband sensor read the shot it is a headshot,
+  whichever decoded first. A shot read by both a body and a headband sensor is
+  therefore a headshot: the headband sits above the vest, so a shot that
+  reaches it was aimed high.
+- **Priority:** a cue never interrupts a higher one (killed above respawn
+  above heavy above light); equal cues restart. Stopping the match silences
+  the motors.
+- **Classification** uses the damage the shot is worth before the health
+  clamp, so a light hit on a nearly dead player is still a light cue.
+
 ## Game modes (v1)
 
 - **Free-for-all:** timed (default 10 min); points per hit and per down;
@@ -192,9 +221,10 @@ still one frame, so the vest, the hit log and the server need no change.
 | USB-C charger module with charge-controller IC (TP4056-class with DW01 protection or better) | 2 | 4 |
 | Blaster extras: wide-angle 940 nm LED + MOSFET + resistor, two more trigger switches, piezo buzzer | — | 4 |
 | Battery sense: 2 resistors + capacitor per board | — | 0.5 |
+| Second coin vibration motor (headband) + MOSFET + diode | 1 | 1.5 |
 | Fuse or PTC per pack, wiring, connectors | — | 3 |
 | Enclosures (3D printed), vest and headband webbing | — | 8 |
-| **Total** | | **about 57** (range 49–65) |
+| **Total** | | **about 59** (range 51–67) |
 
 Prototype: 2 players about $120–150 including spares; tools (soldering,
 multimeter, a 940 nm-sensitive phone camera or IR card for checking) are the

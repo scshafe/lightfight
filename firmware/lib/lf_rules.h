@@ -116,6 +116,7 @@ typedef struct {
     lf_hit_kind kind;
     lf_ignore_reason reason;       /* meaningful when kind == LF_HIT_NONE */
     uint8_t shooter, seq, damage;  /* damage actually applied */
+    uint8_t full_damage;           /* what the shot's code is worth before the health clamp */
     uint16_t health_after;
 } lf_hit;
 
