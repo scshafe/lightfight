@@ -101,10 +101,15 @@ on a hobby MCU.
   `state` (notify: health, ammo, alive, battery), `events` (notify with
   sequence numbers and an `ack` write so nothing is lost on a drop),
   `command` (write: start, stop, respawn, reload-allowed).
-- **Pairing:** first pairing by a button on the device plus LE Secure
-  Connections (passkey shown on the phone and gear LEDs); the phone stores the
-  bond. Reconnection is automatic through iOS state restoration; the HUD
-  shows link state. Gear keeps playing when the link is down.
+- **Pairing (amended 2026-10-26, owner decision):** LE Secure Connections,
+  "just works" (the gear has no display, so no passkey), bonded, so a phone
+  pairs once and reconnects on its own through iOS state restoration. A new
+  phone can pair only in a 60 s pairing window: after power-up with no bonded
+  phone, or after holding the BOOT/pair button for 3 s; 10 s forgets all
+  phones. Anyone nearby who connects inside the window can pair; the window
+  and the button keep that to the owner's own gear. Details:
+  `docs/ble-protocol.md`. The HUD shows link state; gear keeps playing when
+  the link is down.
 - **Latency:** connection interval 15–30 ms gives well under 100 ms from hit
   to HUD, which is not in the hit path. Phone-to-server adds the tailnet RTT.
 - Messages are small, versioned, and use the same test vectors as the IR
