@@ -98,17 +98,22 @@ func TestBLEVectors(t *testing.T) {
 		var got []byte
 		switch r[0] {
 		case "config":
-			c := Config{uint8(v[1]), uint8(v[2]), uint8(v[3]), v[9] != 0,
-				uint16(v[4]), uint16(v[5]), uint16(v[6]), uint16(v[7]), uint16(v[8]), [8]uint8{}}
+			c := Config{Player: uint8(v[1]), Team: uint8(v[2]), FriendlyFire: v[3] != 0,
+				MaxHealth: uint16(v[4]), RespawnMs: uint16(v[5])}
 			for i := 0; i < 8; i++ {
-				c.DamageTable[i] = uint8(v[10+i])
+				c.DamageTable[i] = uint8(v[6+i])
+			}
+			for i := 0; i < Modes; i++ {
+				p := v[14+5*i:]
+				c.Mode[i] = Mode{uint8(p[0]), p[1] != 0, uint16(p[2]), uint16(p[3]), uint16(p[4])}
 			}
 			got, err = c.Encode()
 			if d, derr := DecodeConfig(want); derr != nil || d != c {
 				t.Errorf("config decode: %v, %v", d, derr)
 			}
 		case "state":
-			s := State{uint8(v[1]), uint16(v[2]), uint16(v[3]), uint8(v[4])}
+			s := State{Flags: uint8(v[1]), Health: uint16(v[2]), Ammo: [Modes]uint16{uint16(v[3]), uint16(v[4]), uint16(v[5])},
+				ReloadingMask: uint8(v[6]), BatteryPct: uint8(v[7])}
 			got, err = s.Encode()
 			if d, derr := DecodeState(want); derr != nil || d != s {
 				t.Errorf("state decode: %v, %v", d, derr)
@@ -155,11 +160,30 @@ func TestBLERejects(t *testing.T) {
 	if _, err := DecodeConfig(cfg); err != ErrRange {
 		t.Errorf("player: %v", err)
 	}
-	if _, err := DecodeState([]byte{1, 16, 0, 0, 0, 0, 0}); err != ErrRange {
-		t.Errorf("state flags: %v", err)
+	st := make([]byte, StateLen)
+	st[0] = Version
+	for _, flags := range []byte{0x40, 0x30} { // an unknown flag bit; mode 3
+		st[1] = flags
+		if _, err := DecodeState(st); err != ErrRange {
+			t.Errorf("state flags %#x: %v", flags, err)
+		}
 	}
-	if _, err := DecodeState([]byte{1, 0, 0, 0, 0, 0, 101}); err != ErrRange {
+	st[1], st[10] = 0, 8
+	if _, err := DecodeState(st); err != ErrRange {
+		t.Errorf("reloading mask: %v", err)
+	}
+	st[10], st[11] = 0, 101
+	if _, err := DecodeState(st); err != ErrRange {
 		t.Errorf("battery: %v", err)
+	}
+	cfg[0], cfg[1] = Version, 0
+	cfg[16] = 8 // a damage code above 7
+	if _, err := DecodeConfig(cfg); err != ErrRange {
+		t.Errorf("damage code: %v", err)
+	}
+	cfg[16], cfg[17] = 0, 2 // auto_reload not 0/1
+	if _, err := DecodeConfig(cfg); err != ErrRange {
+		t.Errorf("auto reload: %v", err)
 	}
 	if _, err := DecodeEvent([]byte{1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}); err != ErrRange {
 		t.Errorf("kind: %v", err)

@@ -147,12 +147,13 @@ static void test_commands_and_config(void)
     lf_rules_config c = lf_rules_default_config(1, 0);
     lf_hub_init(&h, &c, grab, &cap);
     CHECK(!h.rules.active);
-    lf_ble_config bc = {.player = 7, .team = 3, .damage_code = 1, .friendly_fire = true, .max_health = 50,
-                        .magazine = 10, .reload_ms = 1000, .respawn_ms = 5000, .fire_interval_ms = 300,
-                        .damage_table = {5, 10, 15, 20, 25, 30, 35, 40}};
+    lf_ble_config bc = {.player = 7, .team = 3, .friendly_fire = true, .max_health = 50, .respawn_ms = 5000,
+                        .damage_table = {5, 10, 15, 20, 25, 30, 35, 40},
+                        .mode = {{1, true, 10, 1000, 300}, {3, false, 4, 2000, 900}, {5, false, 2, 3000, 800}}};
     lf_hub_apply_config(&h, &bc);
     CHECK(h.rules.cfg.player == 7 && h.rules.cfg.team == 3 && h.rules.cfg.max_health == 50);
     CHECK(h.rules.cfg.friendly_fire && h.rules.cfg.damage_table[2] == 15);
+    CHECK(h.rules.cfg.mode[1].magazine == 4 && h.rules.cfg.mode[2].damage_code == 5 && h.rules.cfg.mode[0].auto_reload);
     CHECK(lf_hub_command(&h, LF_CMD_START, 0) == 1);
     CHECK(h.rules.health == 50 && h.rules.active);
     CHECK(lf_hub_command(&h, LF_CMD_START, 0) == 0); /* already running */

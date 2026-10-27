@@ -101,6 +101,7 @@ on a hobby MCU.
   `state` (notify: health, ammo, alive, battery), `events` (notify with
   sequence numbers and an `ack` write so nothing is lost on a drop),
   `command` (write: start, stop, respawn, ping, and disable/enable for the blaster).
+  `config` and `state` carry the three firing modes (see Firing modes).
   The phone relays the vest's down state to the blaster as disable/enable
   (owner decision 2026-10-26, about 100 ms gap accepted).
 - **Pairing (amended 2026-10-26, owner decision):** LE Secure Connections,
@@ -116,6 +117,42 @@ on a hobby MCU.
   to HUD, which is not in the hit path. Phone-to-server adds the tailnet RTT.
 - Messages are small, versioned, and use the same test vectors as the IR
   frames.
+
+## Firing modes
+
+Owner decisions of 2026-10-26. The blaster has three trigger buttons, one per
+firing mode; every mode stamps its own 3-bit damage code in the IR frame, and
+the damage table (match setting) turns the code into health points. A hit is
+still one frame, so the vest, the hit log and the server need no change.
+
+| Mode | Button | Emitter | Sound | Damage code (default hp) | Magazine | Cooldown | Reload | Auto-reload |
+|------|--------|---------|-------|--------------------------|----------|----------|--------|-------------|
+| Light | A | narrow LED | none | 0 (10) | 30 | 250 ms | 2 s | on |
+| Heavy | B | narrow LED | blaster buzzer, 0.2 s falling chirp | 3 (50) | 5 | 1.5 s | 3 s | off |
+| Shotgun | C | wide-angle LED, short range | none | 2 (34) | 2 | 1 s | 3.5 s | off |
+
+- **Cost of the heavy shot:** the trade-off is built from three settings, not
+  one: its own small magazine, a long cooldown and a long reload. Magazines are
+  separate, so emptying the heavy mode does not stop the light one. Every
+  number is a per-match setting (`config`, `docs/ble-protocol.md`); the table is
+  the default the server hands out.
+- **Rate cap:** besides each mode's cooldown, no two shots of any mode are
+  closer than 250 ms. This is the emitter gate's minimum, kept in the rules
+  engine too, so a round is never spent on a shot the gate would refuse.
+- **Shotgun:** one frame from a second LED with a wide cone and a series
+  resistor sized so the frame decodes only within roughly 3-5 m (tuned on the
+  bench, B10). It uses its own damage code and every vest in the cone decodes
+  it, so one shot can hit several players; each target's gear and the server
+  de-duplicate per target as before. It does not need a different frame.
+- **Reload:** each mode reloads separately and the others keep firing. A short
+  press of the reload button reloads the mode fired last (the light mode before
+  any shot); holding it for 0.8 s reloads every mode that is not full. A mode
+  with auto-reload starts by itself when its last round is spent, or when the
+  trigger is pulled on an empty magazine. Going down cancels reloads; a respawn
+  refills every magazine.
+- **Sound:** only the heavy mode makes a sound, so others can hear it; the
+  sound table is one line per mode in `firmware/idf/main/blaster.c`. A piezo
+  on the blaster is a passive one driven with a tone (LEDC), not the vest's.
 
 ## Game modes (v1)
 
@@ -153,9 +190,11 @@ on a hobby MCU.
 | Vibration motor, piezo buzzer, status LEDs, trigger and reload switches | — | 6 |
 | 1S Li-ion/LiPo cells with built-in protection (blaster, hub) | 2 | 12 |
 | USB-C charger module with charge-controller IC (TP4056-class with DW01 protection or better) | 2 | 4 |
+| Blaster extras: wide-angle 940 nm LED + MOSFET + resistor, two more trigger switches, piezo buzzer | — | 4 |
+| Battery sense: 2 resistors + capacitor per board | — | 0.5 |
 | Fuse or PTC per pack, wiring, connectors | — | 3 |
 | Enclosures (3D printed), vest and headband webbing | — | 8 |
-| **Total** | | **about 52** (range 45–60) |
+| **Total** | | **about 57** (range 49–65) |
 
 Prototype: 2 players about $120–150 including spares; tools (soldering,
 multimeter, a 940 nm-sensitive phone camera or IR card for checking) are the
@@ -170,6 +209,22 @@ owner's. A cheaper kit variant exists (decision 8).
   radiant intensity in the beam. The design is hobbyist-level and not a
   certified product; the owner should check the figures before use,
   especially around children.
+- **Shotgun emitter (eye safety, owner decision 2026-10-26):** a second 940 nm
+  LED, wide-angle (half-angle 45-60 degrees), no lens, on its own MOSFET with a
+  larger series resistor (20-30 mA instead of up to 100 mA). A wide LED spreads
+  its power over a larger solid angle, so its radiant intensity is *lower* than
+  the narrow LED's, not higher. Worked example at the closest approach we
+  design for (200 mm, from the datasheet typicals of the part classes, to be
+  recomputed with the real parts): narrow LED about 100 mW/sr at 100 mA gives
+  E = Ie/d^2 = 2.5 W/m^2 while the carrier is on; wide LED about 10-25 mW/sr
+  at 25 mA gives 0.25-0.6 W/m^2. The IEC 62471 exempt limit for infrared
+  irradiance (780-3000 nm) is 100 W/m^2 for exposures of 1000 s and more and
+  higher for short ones, and the shots are short bursts (a frame is under
+  50 ms and the gate allows 50 ms of LED on-time per second), so both emitters
+  sit more than 100 times under it. The firmware gate is shared: only one
+  LED transmits at a time and the on-time budget counts both together. The
+  retina thermal limit depends on the chip's radiance, which only the
+  datasheet gives; check it when the part is chosen, as for the narrow LED.
 - **Current:** the LED current is set in hardware (series resistor sized to the
   datasheet rating; peak current within the part's pulsed rating and the
   average within its continuous rating). A MOSFET gate pull-down keeps the LED

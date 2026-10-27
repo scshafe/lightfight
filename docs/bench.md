@@ -66,13 +66,33 @@ carrier (38 kHz +-2%, duty at most 50%), every mark and space against
 that there is no mark outside a frame. **Pass = `PASS` and exit 0.** Attach the
 output to the PR.
 
-## B4 - trigger, ammo, reload (no AUTOFIRE)
+## B4 - triggers, ammo, reload (no AUTOFIRE)
 
-Flash the plain `blaster` role (no autofire). Pull the trigger once per second for
-thirty shots: the monitor logs each shot with a rising seq (wrapping at 16)
-and the ammo going from 29 to 0; the 31st pull logs "no shot". Press reload
-and wait 2 s: ammo is 30 again. Holding the trigger fires one shot, not a
-stream. Pulling faster than four a second logs "no shot: 5" (rate limited).
+Flash the plain `blaster` role (no autofire). The monitor logs each shot
+with its mode, a rising seq (wrapping at 16) and "no shot" lines with a code
+(1 inactive, 2 dead, 3 disabled, 4 reloading, 5 no ammo, 6 rate limited,
+7 bad mode; the numbering is `lf_shot_result` in `firmware/lib/lf_rules.h`).
+
+1. **Trigger A (light, silent):** thirty pulls a second apart: each logs
+   `[mode 0]` with damage code 0, no sound. After the 30th the blaster
+   reloads by itself (auto-reload on): 2 s later the next pull fires.
+   Holding the trigger fires one shot, not a stream. Pulling faster than four a
+   second logs "no shot: 6".
+2. **Trigger B (heavy, sound):** each pull logs `[mode 1]` with damage code 3
+   and plays a falling chirp from the buzzer. Cooldown: a second pull within
+   1.5 s logs "no shot: 6". After the fifth shot the magazine is empty and
+   the sixth logs "no shot: 5" (no auto-reload): press reload (short) and
+   after 3 s it fires again.
+3. **Trigger C (shotgun):** `[mode 2]`, damage code 2, silent, two shots, then
+   empty; a short reload press reloads it (the mode fired last), 3.5 s.
+4. **Modes are independent:** empty the heavy mode; the light mode still fires.
+   The 250 ms gap holds across modes: A then B within 250 ms logs "no shot: 6"
+   for the second one.
+5. **Reload target:** fire A once, then B once, then short-press reload: only
+   B reloads (state, B8, shows the reloading mask 2). Hold reload for a second:
+   every mode that is not full reloads.
+6. Nothing sounds on A or C. Record the sound level of B at 2 m (a phone's
+   noise meter is enough) and whether it is clear outdoors.
 
 ## B5 - fault latch
 
@@ -176,6 +196,32 @@ Needs a multimeter and a charged pack. Flash a board with its pack connected.
    jump (the reading is averaged over about 8 s).
 4. Unplug the pack and power from USB only: the percentage stays at its last
    value (100 if none), it does not drop to 0.
+
+## B10 - the shotgun's range
+
+Needs the blaster with the wide LED fitted (docs/hardware.md), the hub on a
+vest or a stand with the receivers at chest height, and a tape measure. The
+goal is a frame that decodes at 3-5 m across a wide cone and not beyond.
+
+1. Flash the `blaster-bench-shotgun` role
+   (`firmware/scripts/idf-flash.sh blaster-bench-shotgun /dev/ttyACM0`): the
+   shotgun mode fires one frame a second without the trigger, through the same
+   safety gate.
+2. Measure the current in the wide LED's leg as in B2 (1 ohm shunt): the peak
+   must be within the LED's continuous rating at 4.2 V, and about 20-30 mA with
+   the 100 ohm start value. Capture the waveform as in B3
+   (`tools/lfcapture.py`): it must be the same frame format with damage code 2.
+3. With the hub running (B6) and `blaster.log`/`hub.log` saved, fire 30 shots
+   at 1, 2, 3, 4, 5, 6 and 8 m, aimed at the vest; score each distance with
+   `python3 tools/lfhits.py --expect hit blaster.log hub.log`. Pass for the
+   range: at least 95% at 3 m, and the hit rate falls below 10% by 8 m.
+   If it reaches too far, fit a larger resistor (150, 220 ohm); too short, a
+   smaller one, never below the rating limit in B2. Record the final resistor.
+4. The cone: at the distance where the rate is 95%, move the blaster sideways
+   so the vest sits 30, 45 and 60 degrees off the axis: record the hit rate at
+   each angle. Two vests side by side 1 m apart at 3 m must both register one
+   shot as one hit each.
+5. Aimed away and at the ceiling: zero hits, as in B7.
 
 ## Records
 

@@ -3,6 +3,7 @@
 
 #include "../lib/lf_hub.h"
 #include "../lib/lf_link.h"
+#include "ble_rows.h"
 #include "lf_test.h"
 
 #ifndef BLE_VECTORS
@@ -29,7 +30,7 @@ static lf_link make(fake *f)
 {
     memset(f, 0, sizeof *f);
     lf_evq_init(&f->q);
-    f->state = (lf_ble_state){3, 90, 25, 87};
+    f->state = (lf_ble_state){.flags = 3, .health = 90, .ammo = {25, 4, 1}, .battery_pct = 87};
     lf_link l;
     lf_link_ops ops = {f, f_config, f_cmd, f_ack, f_state, f_pending};
     lf_link_init(&l, &ops);
@@ -78,9 +79,16 @@ static void test_vectors(void)
         lf_notification note;
         if (!strcmp(fld[0], "config")) {
             CHECK(lf_link_write(&l, LF_CHR_CONFIG, wire, wn, 0) == LF_LINK_OK);
-            CHECK(f.configs == 1 && f.config.player == v[1] && f.config.team == v[2] &&
-                  f.config.max_health == v[4] && f.config.fire_interval_ms == v[8] &&
-                  f.config.damage_table[7] == v[17]);
+            lf_ble_config want = row_config(v);
+            CHECK(f.configs == 1 && f.config.player == want.player && f.config.team == want.team &&
+                  f.config.max_health == want.max_health && f.config.respawn_ms == want.respawn_ms &&
+                  !memcmp(f.config.damage_table, want.damage_table, 8));
+            for (int m = 0; m < LF_BLE_MODES; m++)
+                CHECK(f.config.mode[m].damage_code == want.mode[m].damage_code &&
+                      f.config.mode[m].auto_reload == want.mode[m].auto_reload &&
+                      f.config.mode[m].magazine == want.mode[m].magazine &&
+                      f.config.mode[m].reload_ms == want.mode[m].reload_ms &&
+                      f.config.mode[m].fire_interval_ms == want.mode[m].fire_interval_ms);
         } else if (!strcmp(fld[0], "command")) {
             CHECK(lf_link_write(&l, LF_CHR_COMMAND, wire, wn, 0) == LF_LINK_OK);
             CHECK(f.cmds == 1 && f.last_cmd == v[1]);
@@ -92,7 +100,7 @@ static void test_vectors(void)
             CHECK(lf_link_write(&l, LF_CHR_ACK, wire, wn, 0) == LF_LINK_OK);
             CHECK(f.q.count == (v[1] >= 3 && v[1] < 32768 ? 0u : 3u));
         } else if (!strcmp(fld[0], "state")) {
-            f.state = (lf_ble_state){(uint8_t)v[1], (uint16_t)v[2], (uint16_t)v[3], (uint8_t)v[4]};
+            f.state = row_state(v);
             CHECK(lf_link_next(&l, 0, LF_NOTIFY_STATE, &note) == 1);
             CHECK(note.which == LF_NOTIFY_STATE && note.len == wn && !memcmp(note.data, wire, wn));
             uint8_t rd[LF_BLE_STATE_LEN];
@@ -250,10 +258,10 @@ static void test_state_pacing(void)
     lf_link_set_connected(&l, 1);
     CHECK(lf_link_next(&l, 100, LF_NOTIFY_STATE, &n) == 1); /* the first one */
     CHECK(lf_link_next(&l, 200, LF_NOTIFY_STATE, &n) == 0); /* unchanged */
-    f.state.ammo = 24;
+    f.state.ammo[0] = 24;
     CHECK(lf_link_next(&l, 300, LF_NOTIFY_STATE, &n) == 1); /* changed: at once */
     lf_ble_state s;
-    CHECK(lf_ble_decode_state(n.data, n.len, &s) && s.ammo == 24);
+    CHECK(lf_ble_decode_state(n.data, n.len, &s) && s.ammo[0] == 24);
     CHECK(lf_link_next(&l, 300 + LF_LINK_STATE_PERIOD_MS - 1, LF_NOTIFY_STATE, &n) == 0);
     CHECK(lf_link_next(&l, 300 + LF_LINK_STATE_PERIOD_MS, LF_NOTIFY_STATE, &n) == 1); /* keepalive */
     /* a failed send is offered again, even though the state has not changed */
@@ -295,8 +303,9 @@ static void test_with_the_real_hub(void)
     lf_link_set_connected(&l, 1);
 
     /* the phone configures and starts the match, as the server's join reply says */
-    lf_ble_config bc = {.player = 7, .team = 2, .max_health = 100, .magazine = 30, .reload_ms = 2000,
-                        .respawn_ms = 10000, .fire_interval_ms = 250, .damage_table = {10, 20, 34, 50, 75, 100, 5, 1}};
+    lf_ble_config bc = {.player = 7, .team = 2, .max_health = 100, .respawn_ms = 10000,
+                        .damage_table = {10, 20, 34, 50, 75, 100, 5, 1},
+                        .mode = {{0, true, 30, 2000, 250}, {3, false, 5, 3000, 1500}, {2, false, 2, 3500, 1000}}};
     uint8_t wire[LF_BLE_CONFIG_LEN];
     CHECK(lf_ble_encode_config(&bc, wire) == sizeof wire);
     CHECK(lf_link_write(&l, LF_CHR_CONFIG, wire, sizeof wire, 0) == LF_LINK_OK);
