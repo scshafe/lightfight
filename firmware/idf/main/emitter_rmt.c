@@ -3,12 +3,11 @@
 #include "driver/gpio.h"
 #include "lf_emitter.h"
 
-/* The budget in lf_emitter.h assumes at most this carrier duty. */
-#define CARRIER_DUTY 0.33f
-_Static_assert(33 <= LF_EMIT_CARRIER_DUTY_PERCENT, "carrier duty exceeds the emitter budget");
-
-esp_err_t lf_rmt_init(lf_rmt *e, int gpio)
+esp_err_t lf_rmt_init(lf_rmt *e, int gpio, unsigned duty_percent)
 {
+    /* The budget in lf_emitter.h assumes at most this carrier duty. */
+    if (duty_percent == 0 || duty_percent > LF_EMIT_CARRIER_DUTY_PERCENT)
+        return ESP_ERR_INVALID_ARG;
     *e = (lf_rmt){.gpio = gpio};
     rmt_tx_channel_config_t cfg = {
         .gpio_num = gpio,
@@ -22,7 +21,7 @@ esp_err_t lf_rmt_init(lf_rmt *e, int gpio)
         return err;
     rmt_carrier_config_t carrier = {
         .frequency_hz = LF_IR_CARRIER_HZ,
-        .duty_cycle = CARRIER_DUTY,
+        .duty_cycle = duty_percent / 100.0f,
     };
     if ((err = rmt_apply_carrier(e->chan, &carrier)) != ESP_OK)
         return err;

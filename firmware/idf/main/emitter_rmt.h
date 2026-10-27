@@ -18,7 +18,10 @@ typedef struct {
     rmt_symbol_word_t symbols[LF_IR_TIMINGS / 2 + 1];
 } lf_rmt;
 
-esp_err_t lf_rmt_init(lf_rmt *e, int gpio);
+/* duty_percent is the carrier duty: it sets the LED's mean current in a mark
+ * (peak current times duty), so it must stay within the LED's rating at the
+ * peak current the resistor allows. Refused above the budget's cap. */
+esp_err_t lf_rmt_init(lf_rmt *e, int gpio, unsigned duty_percent);
 /* Starts one frame; returns at once. Never loops. */
 esp_err_t lf_rmt_send(lf_rmt *e, const uint16_t t[LF_IR_TIMINGS]);
 /* Waits for the end of the frame; ESP_ERR_TIMEOUT if it does not end. */

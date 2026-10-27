@@ -67,6 +67,10 @@ class CaptureTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("carrier", "\n".join(lines))
 
+    def test_duty_at_the_cap_passes(self):
+        lines, ok = lfcapture.analyze(capture([0x15396E], duty=0.50))
+        self.assertTrue(ok, lines)
+
     def test_duty_over_budget_fails(self):
         lines, ok = lfcapture.analyze(capture([0x15396E], duty=0.65))
         self.assertFalse(ok)

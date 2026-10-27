@@ -183,6 +183,58 @@ library with host tests (`test_haptic`, `test_hub`).
 - **Classification** uses the damage the shot is worth before the health
   clamp, so a light hit on a nearly dead player is still a light cue.
 
+## Optics (the lensed main emitter)
+
+Owner design decision of 2026-10-27, from an optics review. The goal is 75 m
+feasible and 50 m reliable outdoors. A bare TSAL6200 at about 100 mA reaches
+only about 5 m against a receiver facing the sun, because the TSOP threshold
+rises from about 0.1 to about 3 mW/m^2 in sunlight (TSOP382 datasheet, Fig. 6).
+The light and heavy modes therefore share one narrow emitter behind a lens;
+the shotgun keeps its wide LED with no lens.
+
+- **Optics:** a 40 mm diameter lens of about 50 mm focal length (PMMA asphere
+  or Fresnel) with the LED at its focus, in a blackened tube with baffles so
+  no light leaves except through the lens.
+- **Drive:** about 200 mA peak, the TSAL6200's repetitive-pulse rating at 50%
+  duty (pulses of 13 us, well under its 100 us limit). Do not exceed it: the
+  hardware sets the current (15 ohm, docs/hardware.md), the firmware sets the
+  carrier duty to 50% for this LED (33% stays on the wide LED) and the safety
+  gate still caps the average. The mean current in a mark is then 100 mA, the
+  part's continuous rating.
+- **The trade-off:** the lens aperture sets the range and the focal length
+  sets the cone width. Intensity grows with the lens area (D^2); the beam's
+  half-angle is about the virtual source radius over the focal length
+  (1.2 mm / 50 mm, so about 1.4 degrees before blur). A bigger or closer
+  lens collects more light and goes further; a longer focal length narrows the
+  cone, which is more range per watt but harder to aim, since the cone is the
+  hit zone. 40 mm and 50 mm give a cone a player can still aim.
+
+Modelled values (the owner's review: Gaussian beam, 2.4 mm virtual source,
+80% lens efficiency): about 12.5 W/sr for the bare LED at 200 mA, scaled by
+the lens area to about 32 W/sr. These are models, not measurements; the bench
+step B11 measures them.
+
+| Case | Range limit | Hit cone | Margin |
+|------|-------------|----------|--------|
+| Receiver facing the sun, threshold about 3 mW/m^2 | about 104 m | | |
+| Shade | about 146 m | | |
+| 50 m, sun | | +-2.0 degrees (3.5 m wide) | 6.4 dB |
+| 75 m, sun | | about 3.5 m wide | 2.8 dB |
+
+What I checked of the numbers: 32 W/sr over 3 mW/m^2 gives 103 m, and over
+the 50 m and 75 m irradiances (12.8 and 5.7 mW/m^2) it gives margins of 6.3
+and 2.8 dB, so the sun rows reproduce. The shade row does not follow from the
+datasheet's 0.1 mW/m^2 (that would reach several hundred metres); 146 m
+implies a threshold of about 1.5 mW/m^2 in shade, so I took the figure as
+given. Two things will move the results: the intensity is roughly
+proportional to the LED current, so at a cell voltage of 3.3 V (about 120 mA
+through the 15 ohm resistor against about 177 mA at 4.2 V) the range drops by
+more than a third; and a constant-current driver would remove that, which I
+have not added. B11 measures at two cell voltages for that reason.
+
+Out of scope until decided: sun hoods on the receivers and a back-of-torso
+sensor.
+
 ## Game modes (v1)
 
 - **Free-for-all:** timed (default 10 min); points per hit and per down;
@@ -214,19 +266,20 @@ library with host tests (`test_haptic`, `test_hub`).
 | Item | Qty | Est. cost (USD) |
 |------|-----|-----------------|
 | ESP32-C3 dev board (blaster, vest hub) | 2 | 10 |
-| 940 nm IR LED (eye-safe class, rated ≥100 mA) + driver (logic MOSFET, series resistor) + optional lens | 1–2 | 3 |
+| 940 nm IR LED (eye-safe class, rated ≥100 mA continuous and 200 mA repetitive) + driver (logic MOSFET, series resistor) | 1–2 | 3 |
 | 38 kHz IR receiver modules (TSOP38238 class) for vest and headband | 5 | 6 |
 | Vibration motor, piezo buzzer, status LEDs, trigger and reload switches | — | 6 |
 | 1S Li-ion/LiPo cells with built-in protection (blaster, hub) | 2 | 12 |
 | USB-C charger module with charge-controller IC (TP4056-class with DW01 protection or better) | 2 | 4 |
 | Blaster extras: wide-angle 940 nm LED + MOSFET + resistor, two more trigger switches, piezo buzzer | — | 4 |
 | Battery sense: 2 resistors + capacitor per board | — | 0.5 |
+| Blaster optics: 40 mm, f about 50 mm PMMA lens, printed blackened tube and baffles, 100 uF supply capacitor | 1 | 4 |
 | Second coin vibration motor (headband) + MOSFET + diode | 1 | 1.5 |
 | Fuse or PTC per pack, wiring, connectors | — | 3 |
 | Enclosures (3D printed), vest and headband webbing | — | 8 |
-| **Total** | | **about 59** (range 51–67) |
+| **Total** | | **about 63** (range 55–71) |
 
-Prototype: 2 players about $120–150 including spares; tools (soldering,
+Prototype: 2 players about $130–165 including spares; tools (soldering,
 multimeter, a 940 nm-sensitive phone camera or IR card for checking) are the
 owner's. A cheaper kit variant exists (decision 8).
 
@@ -239,25 +292,66 @@ owner's. A cheaper kit variant exists (decision 8).
   radiant intensity in the beam. The design is hobbyist-level and not a
   certified product; the owner should check the figures before use,
   especially around children.
+- **Lensed main emitter (eye safety, owner decision 2026-10-27):** the lens
+  raises the intensity on axis (about 32 W/sr modelled, docs/design.md
+  "Optics") but not the power: the beam carries at most what the LED emits,
+  collected by a 40 mm aperture. So the point-source rule E = Ie/d^2 is not
+  valid at 200 mm (it would give 800 W/m^2 from a source whose whole beam
+  holds about 0.12 W); the irradiance there is the beam power over the beam
+  area. Worked example, all from the modelled figures:
+  - Beam power: 32 W/sr over a +-2.0 degree cone (0.0038 sr) is about 0.12 W
+    while the carrier is on. That is already generous: the TSAL6200 emits about
+    55 mW at 100 mA, and 80% of roughly twice that is nearer 90 mW.
+  - Corneal irradiance at 200 mm: the beam is about 54 mm across there
+    (40 mm lens plus the spread), 2.3e-3 m^2, so E = 0.12 / 2.3e-3 = about
+    52 W/m^2 with the carrier on. At the lens face (an eye against the lens)
+    it is 0.12 / 1.26e-3 = about 96 W/m^2.
+  - Time-averaged at the duty cap: the safety gate allows 50 ms of LED
+    on-time in any second, 5%; normal fire (a frame has 17 ms of marks, so
+    8.5 ms of LED on-time at 50% carrier, at most 4 frames a second) is 3.4%.
+    At the 5% cap the average is about 2.6 W/m^2 at 200 mm and 4.8 W/m^2 at the
+    face.
+  - Against IEC 62471, infrared radiation to the eye (780-3000 nm), exempt
+    group: 100 W/m^2 for exposures over 1000 s (and 18000 t^-0.75 W/m^2,
+    far higher, for shorter ones). The time-averaged value is about 38 times
+    under it at 200 mm and about 21 times at the face; even the carrier-on
+    value (96 W/m^2 at the face) does not reach 100 W/m^2.
+  - Retinal thermal limit (780-1400 nm): radiance is not raised by a lens
+    (it falls by the lens loss), so it is the LED's own. With the 2.4 mm
+    virtual source of the model, 0.25 W/sr at 200 mA is about 5.5e4
+    W/(m^2 sr); the limit for a source of 12 mrad is 6000/0.012 =
+    5e5, so the carrier-on value is 11 times under and the 5% average about
+    220 times under. If the real emitting area were only the chip (about
+    0.3 mm), the radiance would be 50 times higher and the average only about
+    5 times under. The datasheet gives no chip radiance, so this is the
+    figure to check with the real part before the lens is used on people.
+  - These rest on typical datasheet and modelled values, not measurements. The
+    firmware gate (5% cap) is what holds the averages; do not raise it, the
+    current or the duty without redoing this.
+  - A lens is also a burning glass: pointed at the sun it focuses about 1 W
+    into a spot of a millimetre or so at the LED, which can melt the LED and
+    the tube and start a fire. The tube takes a lens cap, and the blaster is
+    stored and carried with the cap on.
 - **Shotgun emitter (eye safety, owner decision 2026-10-26):** a second 940 nm
   LED, wide-angle (half-angle 45-60 degrees), no lens, on its own MOSFET with a
   larger series resistor (20-30 mA instead of up to 100 mA). A wide LED spreads
   its power over a larger solid angle, so its radiant intensity is *lower* than
   the narrow LED's, not higher. Worked example at the closest approach we
-  design for (200 mm, from the datasheet typicals of the part classes, to be
-  recomputed with the real parts): narrow LED about 100 mW/sr at 100 mA gives
-  E = Ie/d^2 = 2.5 W/m^2 while the carrier is on; wide LED about 10-25 mW/sr
-  at 25 mA gives 0.25-0.6 W/m^2. The IEC 62471 exempt limit for infrared
+  design for (200 mm, from the datasheet typicals of the part class, to be
+  recomputed with the real part): wide LED about 10-25 mW/sr at 25 mA gives
+  E = Ie/d^2 = 0.25-0.6 W/m^2 while the carrier is on, about a hundred times
+  under the lensed narrow emitter below. The IEC 62471 exempt limit for infrared
   irradiance (780-3000 nm) is 100 W/m^2 for exposures of 1000 s and more and
-  higher for short ones, and the shots are short bursts (a frame is under
-  50 ms and the gate allows 50 ms of LED on-time per second), so both emitters
-  sit more than 100 times under it. The firmware gate is shared: only one
+  higher for short ones, and the shots are short bursts (the gate allows
+  50 ms of LED on-time per second), so the wide LED sits more than 100 times
+  under it. The firmware gate is shared: only one
   LED transmits at a time and the on-time budget counts both together. The
   retina thermal limit depends on the chip's radiance, which only the
   datasheet gives; check it when the part is chosen, as for the narrow LED.
 - **Current:** the LED current is set in hardware (series resistor sized to the
   datasheet rating; peak current within the part's pulsed rating and the
-  average within its continuous rating). A MOSFET gate pull-down keeps the LED
+  average within its continuous rating: the lensed LED peaks at 200 mA, its
+  repetitive-pulse rating at 50% duty, and averages 100 mA in a mark). A MOSFET gate pull-down keeps the LED
   off if the MCU hangs or boots. Firmware enforces a fire-rate cap and a
   maximum frame duty cycle (frame 40 ms at most every 250 ms, carrier 50%,
   so the average duty stays under about 8%), and a watchdog resets on a stuck

@@ -22,6 +22,14 @@
 
 static const char *TAG = "blaster";
 
+/* Carrier duty per LED. The lensed narrow LED runs at its repetitive-pulse
+ * rating (about 200 mA peak at 50% duty, docs/hardware.md); the unlensed wide
+ * LED is dimmer by its resistor and keeps the lower duty. */
+#define NARROW_CARRIER_DUTY_PERCENT 50
+#define WIDE_CARRIER_DUTY_PERCENT 33
+_Static_assert(NARROW_CARRIER_DUTY_PERCENT <= LF_EMIT_CARRIER_DUTY_PERCENT, "carrier duty exceeds the emitter budget");
+_Static_assert(WIDE_CARRIER_DUTY_PERCENT <= LF_EMIT_CARRIER_DUTY_PERCENT, "carrier duty exceeds the emitter budget");
+
 static lf_rules s_rules;
 static lf_emitter s_gate;
 static lf_rmt s_led[2]; /* 0 narrow beam (light, heavy), 1 wide shotgun LED */
@@ -173,8 +181,8 @@ static void fire(lf_rules *rules, lf_emitter *gate, uint8_t mode)
 
 void blaster_run(void)
 {
-    ESP_ERROR_CHECK(lf_rmt_init(&s_led[0], CONFIG_LF_PIN_IR_LED));
-    ESP_ERROR_CHECK(lf_rmt_init(&s_led[1], CONFIG_LF_PIN_IR_WIDE));
+    ESP_ERROR_CHECK(lf_rmt_init(&s_led[0], CONFIG_LF_PIN_IR_LED, NARROW_CARRIER_DUTY_PERCENT));
+    ESP_ERROR_CHECK(lf_rmt_init(&s_led[1], CONFIG_LF_PIN_IR_WIDE, WIDE_CARRIER_DUTY_PERCENT));
     gpio_reset_pin(CONFIG_LF_PIN_STATUS_LED);
     gpio_set_direction(CONFIG_LF_PIN_STATUS_LED, GPIO_MODE_OUTPUT);
     const int trigger_pin[LF_MODES] = {CONFIG_LF_PIN_TRIGGER, CONFIG_LF_PIN_TRIGGER_B, CONFIG_LF_PIN_TRIGGER_C};
