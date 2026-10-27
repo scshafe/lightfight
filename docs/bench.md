@@ -23,10 +23,10 @@ monitor with Ctrl-]. Flashing needs the owner's approval each time (AGENTS.md).
 
 ## B1 - the LED is off at rest
 
-Before the first flash, with the LED, MOSFET and resistors on the breadboard
+Before the first flash, with the LED, the current-sink transistors (or MOSFET) and resistors on the breadboard
 and the board powered (or unpowered):
 
-1. Measure the gate-to-ground resistance with the board unpowered: about 100 k.
+1. Measure the gate-to-ground resistance (the main LED: Q1's base to ground) with the board unpowered: about 100 k.
 2. Power the board and hold it in reset (the RESET button): the LED current is
    zero. Release it: the LED stays off until a shot.
 
@@ -35,7 +35,7 @@ pull-down before going on.
 
 ## B2 - LED current
 
-Put a 1 ohm shunt in the LED's ground leg (between MOSFET source and ground)
+Put a 1 ohm shunt in the LED's ground leg (below Rs and Q2's emitter, so it is outside the current loop, for the main LED; between the MOSFET source and ground for the wide one)
 and an oscilloscope across it, or a multimeter in series for the average.
 
 1. Flash the `blaster-bench` role (`firmware/scripts/idf-flash.sh blaster-bench
@@ -44,20 +44,31 @@ and an oscilloscope across it, or a multimeter in series for the average.
 2. Read the peak current in the marks. For the main (lensed) LED **it must be
    no more than 200 mA, its repetitive-pulse rating at 50% duty**, and the
    mean over a mark (peak times the carrier duty) no more than its 100 mA
-   continuous rating; expect about 177 mA at 4.2 V with the 15 ohm resistor
-   (docs/hardware.md). The wide LED is checked in B10.
+   continuous rating; expect about 181 mA with the 3.6 ohm sense resistor
+   (docs/hardware.md), the same at every cell voltage. Look at the edges
+   too: the turn-on must not overshoot 200 mA even briefly (a scope of 20 MHz
+   or better; the shunt's own inductance can fake a spike, so compare with the
+   wide LED's trace) and the rise and fall should be about a microsecond or
+   less, the pulse about 13 us. The wide LED is checked in B10.
 3. Read the average over a second: it is the peak times the carrier duty (50%
    for the main LED) times the mark fraction of the frame; expect about 3.4%
    of the peak with four shots a second, and under 2% with one a second.
-4. Repeat with the battery fully charged (4.2 V) and at about 3.3 V.
+4. Repeat at 4.2, 3.7 and 3.3 V on the BAT rail (a bench supply set to each
+   voltage with a 500 mA limit stands in for the cell; the XIAO then runs from
+   it). The peak current at the three voltages must agree within 10%.
 
-Record the three numbers and the battery voltages. Fail if the peak exceeds
-200 mA at 4.2 V: use a bigger resistor. The carrier duty in the capture (B3)
+Record the numbers at each voltage and the room temperature. Fail if the peak
+exceeds 200 mA at any of the three voltages, or the spread is over 10%: check
+Q2 and Rs (a larger Rs lowers the current); if it is well below 181 mA, check
+the sink's headroom and the base drive. The sink's sense voltage drifts about
+-2 mV/C (docs/hardware.md): note the temperature, and when the blaster will be
+used in the cold, repeat once with the board cooled (a cold pack, about 5 C)
+before trimming Rs down. The carrier duty in the capture (B3)
 reads 50%, within the tool's 2% tolerance.
 
 ## B3 - waveform
 
-Probe the MOSFET gate (or the GPIO) with the logic analyzer at 1 MS/s or more,
+Probe the GPIO (or the MOSFET gate) with the logic analyzer at 1 MS/s or more,
 capture a few seconds with a frame a second, export the edges as CSV
 (`time_seconds,level`), then:
 
@@ -257,38 +268,47 @@ goal is a frame that decodes at 3-5 m across a wide cone and not beyond.
 Owner decision 2026-10-27. The goal: 75 m feasible and 50 m reliable outdoors.
 Needs the blaster with the lens and tube fitted (docs/hardware.md), the cap
 off, an open site with a straight line of 75 m, two hubs (or one hub moved
-between runs), a 100 m tape or a rangefinder, and a sunny day with some shade.
+between runs), a 100 m tape or a rangefinder, and a sunny day with some shade, a lux meter (a phone app will do) and a bench supply.
 Sun hoods and a back sensor are not part of this build, so run it as built.
 
-1. Focus: with the `blaster-bench` role flashed (B2, one frame a second) and a
+1. Current first: run B2 for the finished blaster (lens fitted) at 4.2, 3.7 and
+   3.3 V and write the three peak currents in the table's header row; every
+   later range run uses the same driver and is only meaningful if the current
+   held within 10% across the three.
+2. Focus: with the `blaster-bench` role flashed (B2, one frame a second) and a
    hub 25 m away facing the blaster, slide the LED holder in 1 mm steps and
    note the hit rate; lock it where the hit rate and the cone are best. Check
    by eye (phone camera) that no glow leaks from the tube sides or the
    back: if any does, fix the baffle or the seal before going on. Record the
    position.
-2. Range. Distances 10, 25, 50 and 75 m. Conditions, each at every distance:
+3. Range. Distances 10, 25, 50 and 75 m. Conditions, each at every distance:
    - **sun, sun-facing receiver**: a clear sky, the hub's receivers facing
      the sun (the blaster fires toward it);
    - **sun, shaded receiver**: the same sky, the hub's receivers in shade
      (a hood-free vest in a shadow, or the hub turned away from the sun);
-   - **shade**: overcast or building shade over both ends;
-   - **dark**: after dusk.
+   - **daylight shade**: both ends in shade in daylight, with about 8 klx of
+     ambient light on a lux meter or phone app (the threshold in the model is
+     about 1.5 mW/m^2, TSOP382 Fig. 6); note the reading;
+   - **dark**: after dusk (the threshold is 0.04-0.12 mW/m^2).
    Per distance and condition fire 30 shots about a second apart, aimed at the
    vest on the axis, with the logs saved, and score each with
    `python3 tools/lfhits.py --expect hit blaster.log hub.log`. Note the sky
    and the sun's bearing, the time, the battery voltage at the start and end
-   (B9), and any `stuck` in the `rx` lines. Repeat the 50 and 75 m runs with
-   the cell at about 3.6 V (use a part-drained cell).
-3. Cone width. At 50 m (sun, sun-facing receiver) and at 75 m move the vest
+   (B9), and any `stuck` in the `rx` lines. Repeat the 50 and 75 m runs in the
+   sun-facing condition with the cell (or a bench supply on the BAT rail) at
+   3.7 V and at 3.3 V: with the constant-current driver the hit rate should
+   match the 4.2 V run within 10 points; a drop is a finding about the driver
+   (headroom, Rs) before it is about the optics.
+4. Cone width. At 50 m (sun, sun-facing receiver) and at 75 m move the vest
    sideways in 0.5 m steps, still facing the blaster, and record the hit rate
    at each offset until it falls below 10%. Report the width where it is 95%
    and where it is 50%.
-4. Aimed away and at the sky: zero hits, as in B7. Fire 50 shots at each.
-5. Fill in the table below, in the PR that reports it, with the `lfhits.py` outputs attached. The pass criteria
+5. Aimed away and at the sky: zero hits, as in B7. Fire 50 shots at each.
+6. Fill in the table below, in the PR that reports it, with the `lfhits.py` outputs attached. The pass criteria
    (owner's goal): at least 95% hits at 50 m in every condition on the axis,
    and at least one run at 75 m with the rate above 50%. Anything below it is
    a finding for the optics, not a firmware failure: report the numbers and
-   the focus position, and say which of lens, focus, current and
+   the focus position and the three currents, and say which of lens, focus, current and
    threshold explains the gap.
 
 | Distance | Condition | Receiver | Cell V | Shots | Counted | Hit rate | Cone 95% / 50% width |
@@ -296,8 +316,8 @@ Sun hoods and a back sensor are not part of this build, so run it as built.
 | 10 m | sun | sun-facing | | | | | |
 | 10 m | sun | shaded | | | | | |
 
-(one row per distance 10, 25, 50 and 75 m and per condition above, plus the 3.6 V
-repeats; the model predicts about 6 dB of margin at 50 m and 3 dB
+(one row per distance 10, 25, 50 and 75 m and per condition above, plus the 3.7 V and
+3.3 V repeats; the model predicts about 6 dB of margin at 50 m and 3 dB
 at 75 m with a sun-facing receiver at 4.2 V.)
 
 ## Records
