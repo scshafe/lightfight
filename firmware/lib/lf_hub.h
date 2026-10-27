@@ -7,13 +7,35 @@
 
 #include <stdint.h>
 
+#include <stddef.h>
+
 #include "lf_ble.h"
 #include "lf_haptic.h"
 #include "lf_log.h"
 #include "lf_rules.h"
 #include "lf_rx.h"
 
-#define LF_HUB_SENSORS 5
+#define LF_HUB_SENSORS 6
+
+/* The receivers, by sensor number (the number in the hit log and the pin
+ * order in Kconfig). Each faces horizontally; a visor shades the elevations
+ * above about 30 degrees (hardware/visor.scad). The facing is where the
+ * receiver looks, for a future directional shield to tell which side of the
+ * player a shot came from. */
+enum { LF_FACING_FRONT = 0, LF_FACING_REAR, LF_FACING_LEFT, LF_FACING_RIGHT };
+enum {
+    LF_SENSOR_CHEST = 0,
+    LF_SENSOR_LEFT_SHOULDER,
+    LF_SENSOR_RIGHT_SHOULDER,
+    LF_SENSOR_HEAD_FRONT,
+    LF_SENSOR_HEAD_BACK,
+    LF_SENSOR_BACK
+};
+typedef struct {
+    const char *name;
+    uint8_t zone;   /* LF_ZONE_VEST (body) or LF_ZONE_HEAD */
+    uint8_t facing; /* LF_FACING_* */
+} lf_hub_sensor_desc;
 
 typedef void (*lf_hub_log_fn)(void *ctx, const lf_log_entry *e);
 
@@ -21,12 +43,16 @@ typedef void (*lf_hub_log_fn)(void *ctx, const lf_log_entry *e);
  * so a headshot that a chest sensor decoded first still buzzes the headband. */
 #define LF_HUB_ZONE_SETTLE_MS 15
 
-/* sensors 0-2 are on the vest (chest, shoulders), 3-4 on the headband */
+/* NULL for a number out of range. */
+const lf_hub_sensor_desc *lf_hub_sensor(int sensor);
+/* The zone of a receiver: the vest ones (chest, shoulders, back) are body,
+ * the two headband ones head. */
 uint8_t lf_hub_sensor_zone(int sensor);
 
 typedef struct {
     bool valid;
     uint8_t zones;                  /* LF_ZONE_* bits of the sensors that read the shot */
+    uint8_t sensors;                /* bit per sensor number that read it, for a directional shield */
     uint8_t shooter, seq;
     lf_cue cue;
     uint32_t due_ms;

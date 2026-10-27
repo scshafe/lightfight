@@ -16,7 +16,7 @@ recorded for reference.
 | 1 | Phone platforms | **iOS only for v1** (SwiftUI, CoreBluetooth). The server and BLE protocols are platform-neutral, so Android can follow. | iOS + Android from the start (a cross-platform toolkit such as Flutter; roughly doubles app and test work). |
 | 2 | Phone-to-gear link | **BLE (NimBLE on the ESP32), phone as central, one connection to each of the player's two devices.** Gear plays on its own if the link drops (see Offline). | Blaster-to-vest link, phone talks to one device (fewer phone connections, more firmware). Wi-Fi (more power, needs a network). |
 | 3 | IR protocol | **Custom frame on a 38 kHz carrier** with a CRC and a sequence number (see IR protocol). | MilesTag II compatible (works with commercial gear, but its shot packet has no error check, so it cannot meet "a miss never registers" alone). Could be added later as a receive-only extra. |
-| 4 | How sensors are worn | **Both:** 3 sensors on a vest (chest, left, right shoulder strap) and 2 on a headband, wired to one vest hub. | Vest only (cheaper, hits to the head side do not count). Headband only (small, poor coverage). |
+| 4 | How sensors are worn | **Both:** 4 sensors on a vest (chest, back, left and right shoulder strap) and 2 on a headband (front and back), all facing horizontally with a sun visor, wired to one vest hub. | Vest only (cheaper, hits to the head side do not count). Headband only (small, poor coverage). |
 | 5 | Game modes for v1 | **Free-for-all and team deathmatch**, timed, with respawn. | Add elimination (no respawn) first or instead; capture-style modes need beacons and wait for v2. |
 | 6 | Offline play | **Yes, two levels:** gear keeps health/ammo/respawn itself (works with no phone); the host phone can act as match authority over local peer-to-peer when the server is unreachable. | Server only (simplest, no play without the tailnet). Gear-only with no scoreboard. |
 | 7 | Players outside the tailnet | **v1: guests join through the host's phone** (host phone relays for them, or guests play on gear alone). | Invite guests to the tailnet (requires an install). A public join endpoint such as Tailscale Funnel with a join code (exposes the server, so an owner decision). |
@@ -33,7 +33,7 @@ Further owner steps are listed under Owner steps at the end.
  blaster (ESP32-C3) --BLE--+
    trigger, IR emitter     |
  vest hub (ESP32-C3) --BLE-+-- iPhone (HUD) --WebSocket--> match server
-   5 IR receivers          |      health, ammo, score        on <tailnet>
+   6 IR receivers          |      health, ammo, score        on <tailnet>
    haptics, LEDs           |
         ^                  +-- (offline) host iPhone as authority
         | IR (940 nm, 38 kHz)
@@ -170,7 +170,7 @@ library with host tests (`test_haptic`, `test_hub`).
 | Killed | the hit that takes health to 0 | both, plus the hub buzzer | 300 on, 100 off, 300 on, 100 off, 600 on |
 | Respawn | the player is alive again | both | double tap: 80 on, 80 off, 80 on |
 
-- **Zones:** sensors on the vest (chest, both shoulders) are body, the two
+- **Zones:** sensors on the vest (chest, back, both shoulders) are body, the two
   headband sensors are head. One shot is read by several sensors and counts
   once (the first to decode it); to decide the zone anyway the cue waits 15 ms
   for the others, and if any headband sensor read the shot it is a headshot,
@@ -235,8 +235,15 @@ down to about 2.5 V, against the 200 mA the model uses. That is about 0.85 dB
 the rating in the cold; the real current and intensity are measured in B2 and
 B11.
 
-Out of scope until decided: sun hoods on the receivers and a back-of-torso
-sensor.
+**Receivers (owner decision 2026-10-27):** every receiver gets a sun visor, an
+asymmetric brim that shades elevations above about 30 degrees and keeps the
++-45 degree horizontal acceptance (docs/hardware.md, "Sun visors"; no narrow
+tubes, which cost oblique hits). The headband receivers face horizontally,
+front and back, never upward. The vest hub has six receivers: chest, back,
+two shoulders, headband front and back; the back receiver covers shots from
+behind, and a per-receiver table in the firmware (zone and facing) is there
+for a future directional shield. The visors are expected to restore much of
+the range lost in sunlight; bench B6c measures it.
 
 ## Game modes (v1)
 
@@ -270,7 +277,7 @@ sensor.
 |------|-----|-----------------|
 | ESP32-C3 dev board (blaster, vest hub) | 2 | 10 |
 | 940 nm IR LED (eye-safe class, rated ≥100 mA continuous and 200 mA repetitive) + constant-current driver (2 transistors, 3 resistors, a 0.1 A PTC) for the main LED, MOSFET + resistor for the wide one | 1–2 | 3.3 |
-| 38 kHz IR receiver modules (TSOP38238 class) for vest and headband | 5 | 6 |
+| 38 kHz IR receiver modules (TSOP38238 class) for vest and headband, and a printed visor each | 6 | 7.2 |
 | Vibration motor, piezo buzzer, status LEDs, trigger and reload switches | — | 6 |
 | 1S Li-ion/LiPo cells with built-in protection (blaster, hub) | 2 | 12 |
 | USB-C charger module with charge-controller IC (TP4056-class with DW01 protection or better) | 2 | 4 |
@@ -280,7 +287,7 @@ sensor.
 | Second coin vibration motor (headband) + MOSFET + diode | 1 | 1.5 |
 | Fuse or PTC per pack, wiring, connectors | — | 3 |
 | Enclosures (3D printed), vest and headband webbing | — | 8 |
-| **Total** | | **about 63** (range 55–71; the constant-current driver adds about $0.3 and the total does not move) |
+| **Total** | | **about 64** (range 56–72; the sixth receiver and its visors add about $1.2) |
 
 Prototype: 2 players about $130–165 including spares; tools (soldering,
 multimeter, a 940 nm-sensitive phone camera or IR card for checking) are the

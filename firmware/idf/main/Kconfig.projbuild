@@ -41,8 +41,12 @@ menu "lightfight"
         default 6
 
     config LF_PIN_STATUS_LED
-        int "GPIO of the status LED"
+        int "GPIO of the status LED (-1 for none)"
+        default -1 if LF_ROLE_HUB
         default 10
+        help
+            The hub has no status LED: its GPIO10 is the sixth receiver
+            (LF_PIN_SENSOR5), because the XIAO has no pin left (docs/hardware.md).
 
     config LF_PIN_SENSOR0
         int "GPIO of IR receiver 0, chest (hub)"
@@ -73,6 +77,11 @@ menu "lightfight"
     config LF_PIN_SENSOR4
         int "GPIO of IR receiver 4, headband back (hub)"
         default 7
+        depends on LF_ROLE_HUB
+
+    config LF_PIN_SENSOR5
+        int "GPIO of IR receiver 5, back of the torso (hub)"
+        default 10
         depends on LF_ROLE_HUB
 
     config LF_PIN_HAPTIC

@@ -35,7 +35,7 @@ typedef struct {
 
 static const int s_pins[LF_HUB_SENSORS] = {
     CONFIG_LF_PIN_SENSOR0, CONFIG_LF_PIN_SENSOR1, CONFIG_LF_PIN_SENSOR2,
-    CONFIG_LF_PIN_SENSOR3, CONFIG_LF_PIN_SENSOR4,
+    CONFIG_LF_PIN_SENSOR3, CONFIG_LF_PIN_SENSOR4, CONFIG_LF_PIN_SENSOR5,
 };
 static edge_t s_ring[RING];
 static volatile uint32_t s_head, s_tail, s_dropped;
@@ -82,7 +82,8 @@ void hub_run(void)
     output_pin(CONFIG_LF_PIN_HAPTIC);
     output_pin(CONFIG_LF_PIN_HAPTIC_HEAD);
     output_pin(CONFIG_LF_PIN_BUZZER);
-    output_pin(CONFIG_LF_PIN_STATUS_LED);
+    if (CONFIG_LF_PIN_STATUS_LED >= 0)
+        output_pin(CONFIG_LF_PIN_STATUS_LED);
 
     lf_rules_config cfg = lf_rules_default_config(CONFIG_LF_PLAYER_ID, CONFIG_LF_TEAM);
     lf_hub_init(&s_hub, &cfg, log_line, NULL);
@@ -122,7 +123,8 @@ void hub_run(void)
         gpio_set_level(CONFIG_LF_PIN_HAPTIC, out & LF_OUT_VEST ? 1 : 0);
         gpio_set_level(CONFIG_LF_PIN_HAPTIC_HEAD, out & LF_OUT_HEAD ? 1 : 0);
         gpio_set_level(CONFIG_LF_PIN_BUZZER, out & LF_OUT_BUZZER ? 1 : 0);
-        gpio_set_level(CONFIG_LF_PIN_STATUS_LED, s_hub.rules.alive ? 1 : 0);
+        if (CONFIG_LF_PIN_STATUS_LED >= 0)
+            gpio_set_level(CONFIG_LF_PIN_STATUS_LED, s_hub.rules.alive ? 1 : 0);
         if (ms - last_counters_ms >= 10000) {
             last_counters_ms = ms;
             lf_hub_log_counters(&s_hub, ms);
