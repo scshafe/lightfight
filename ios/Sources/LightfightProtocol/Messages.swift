@@ -60,7 +60,7 @@ public struct State: Equatable {
     }
 
     public func encode() throws -> Data {
-        guard flags <= 7, batteryPct <= 100 else { throw ProtocolError.range }
+        guard flags <= 15, batteryPct <= 100 else { throw ProtocolError.range }
         var w = Writer()
         w.u8(protocolVersion); w.u8(flags); w.u16(health); w.u16(ammo); w.u8(batteryPct)
         return w.data
@@ -69,7 +69,7 @@ public struct State: Equatable {
     public static func decode(_ d: Data) throws -> State {
         var r = try Reader(d, length: length)
         let flags = r.u8(), health = r.u16(), ammo = r.u16(), battery = r.u8()
-        guard flags <= 7, battery <= 100 else { throw ProtocolError.range }
+        guard flags <= 15, battery <= 100 else { throw ProtocolError.range }
         return State(flags: flags, health: health, ammo: ammo, batteryPct: battery)
     }
 }
@@ -121,7 +121,7 @@ public enum Ack {
 }
 
 public enum Command: UInt8 {
-    case start = 1, stop = 2, respawn = 3, ping = 4
+    case start = 1, stop = 2, respawn = 3, ping = 4, disable = 5, enable = 6
 
     public func encode() -> Data { Data([protocolVersion, rawValue]) }
 

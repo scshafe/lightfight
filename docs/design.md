@@ -100,7 +100,9 @@ on a hobby MCU.
   `config` (write: player id, team, damage table, mode, ammo, health),
   `state` (notify: health, ammo, alive, battery), `events` (notify with
   sequence numbers and an `ack` write so nothing is lost on a drop),
-  `command` (write: start, stop, respawn, reload-allowed).
+  `command` (write: start, stop, respawn, ping, and disable/enable for the blaster).
+  The phone relays the vest's down state to the blaster as disable/enable
+  (owner decision 2026-10-26, about 100 ms gap accepted).
 - **Pairing (amended 2026-10-26, owner decision):** LE Secure Connections,
   "just works" (the gear has no display, so no passkey), bonded, so a phone
   pairs once and reconnects on its own through iOS state restoration. A new

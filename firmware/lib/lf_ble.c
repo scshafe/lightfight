@@ -45,7 +45,7 @@ bool lf_ble_decode_config(const uint8_t *b, size_t n, lf_ble_config *m)
 
 size_t lf_ble_encode_state(const lf_ble_state *m, uint8_t out[LF_BLE_STATE_LEN])
 {
-    if (m->flags > 7 || m->battery_pct > 100)
+    if (m->flags > 15 || m->battery_pct > 100)
         return 0;
     out[0] = LF_BLE_VERSION;
     out[1] = m->flags;
@@ -57,7 +57,7 @@ size_t lf_ble_encode_state(const lf_ble_state *m, uint8_t out[LF_BLE_STATE_LEN])
 
 bool lf_ble_decode_state(const uint8_t *b, size_t n, lf_ble_state *m)
 {
-    if (n != LF_BLE_STATE_LEN || b[0] != LF_BLE_VERSION || b[1] > 7 || b[6] > 100)
+    if (n != LF_BLE_STATE_LEN || b[0] != LF_BLE_VERSION || b[1] > 15 || b[6] > 100)
         return false;
     m->flags = b[1];
     m->health = get16(b + 2);
@@ -114,7 +114,7 @@ bool lf_ble_decode_ack(const uint8_t *b, size_t n, uint16_t *event_id)
 
 size_t lf_ble_encode_command(uint8_t cmd, uint8_t out[LF_BLE_COMMAND_LEN])
 {
-    if (cmd < LF_CMD_START || cmd > LF_CMD_PING)
+    if (cmd < LF_CMD_START || cmd > LF_CMD_ENABLE)
         return 0;
     out[0] = LF_BLE_VERSION;
     out[1] = cmd;
@@ -124,7 +124,7 @@ size_t lf_ble_encode_command(uint8_t cmd, uint8_t out[LF_BLE_COMMAND_LEN])
 bool lf_ble_decode_command(const uint8_t *b, size_t n, uint8_t *cmd)
 {
     if (n != LF_BLE_COMMAND_LEN || b[0] != LF_BLE_VERSION || b[1] < LF_CMD_START ||
-        b[1] > LF_CMD_PING)
+        b[1] > LF_CMD_ENABLE)
         return false;
     *cmd = b[1];
     return true;

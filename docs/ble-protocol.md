@@ -30,10 +30,10 @@ guesses.
 | Message | Length | Layout after the version byte |
 |---------|--------|-------------------------------|
 | config | 23 | player u8 (0..63), team u8 (0..7), damage_code u8 (0..7), friendly_fire u8 (0/1), max_health u16, magazine u16, reload_ms u16, respawn_ms u16, fire_interval_ms u16, damage_table 8 x u8 |
-| state | 7 | flags u8 (bit0 active, bit1 alive, bit2 reloading), health u16, ammo u16, battery_pct u8 (0..100) |
+| state | 7 | flags u8 (bit0 active, bit1 alive, bit2 reloading, bit3 disabled), health u16, ammo u16, battery_pct u8 (0..100) |
 | event | 13 | kind u8 (1 hit, 2 down), event_id u16, shooter u8 (0..63), seq u8 (0..15), damage u8, health_after u16, t_ms u32 (gear uptime) |
 | ack | 3 | event_id u16 |
-| command | 2 | cmd u8 (1 start, 2 stop, 3 respawn, 4 ping) |
+| command | 2 | cmd u8 (1 start, 2 stop, 3 respawn, 4 ping, 5 disable, 6 enable) |
 
 `config` mirrors the rules engine's configuration (`lf_rules_config`); the
 phone writes it before a match and the gear applies it on `start`.
@@ -83,14 +83,15 @@ active a new `config` is ignored (it applies to the next one); `start` while
 active and `stop` while idle do nothing. `battery_pct` is a constant 100 until
 a voltage divider on an ADC pin is added to the hardware.
 
-## Open question: the blaster does not know the player is down
+## The blaster and a downed player
 
-The hub knows when the player is down; the blaster, a separate board, does not,
-so it would keep firing. With the current commands the phone can only
-`stop` the blaster (which also ends its match and resets ammo on the next
-`start`). Options: (a) add two commands, "disable" and "enable", that the
-phone sends when the hub's `state` shows the player down or alive again (the
-phone relay adds the BLE latency, about 100 ms, during which a downed player
-can still fire); (b) a direct link between the blaster and the vest (more
-firmware, no phone in the loop). Recommendation: (a). Not implemented; it
-needs the owner's decision.
+The hub knows when the player is down; the blaster, a separate board, does not.
+Owner decision (2026-10-26): the phone relays it. When the hub's `state` shows
+the player down (alive flag clear) the phone writes `disable` to the blaster;
+when the player is alive again it writes `enable`. A disabled blaster refuses
+every trigger pull (no round is spent, no frame is sent) and reloads, and
+reports flag bit3 in its `state`. Both commands work only while a match is
+active, a new `start` always clears the disable, and the hub ignores them.
+The phone relay adds the BLE latency, about 100 ms, during which a downed
+player can still fire; a direct blaster-to-vest link would remove it and is
+not planned.

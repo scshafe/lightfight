@@ -91,8 +91,8 @@ final class VectorTests: XCTestCase {
         XCTAssertThrowsError(try Config.decode(bad)) {
             XCTAssertEqual($0 as? ProtocolError, .range)
         }
-        XCTAssertThrowsError(try State.decode(Data([1, 8, 0, 0, 0, 0, 0])))
+        XCTAssertThrowsError(try State.decode(Data([1, 16, 0, 0, 0, 0, 0])))
         XCTAssertThrowsError(try Event.decode(Data([1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])))
-        XCTAssertThrowsError(try Command.decode(Data([1, 5])))
+        XCTAssertThrowsError(try Command.decode(Data([1, 7])))
     }
 }
