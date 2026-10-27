@@ -55,8 +55,8 @@ static lf_hub make(capture *cap, uint8_t player, uint8_t team)
     return h;
 }
 
-/* One shot seen by all five sensors, each a little differently timed: one hit. */
-static void test_five_sensors_one_hit(void)
+/* One shot seen by all six sensors, each a little differently timed: one hit. */
+static void test_six_sensors_one_hit(void)
 {
     srand(3);
     capture cap = {.n = 0};
@@ -70,7 +70,7 @@ static void test_five_sensors_one_hit(void)
     CHECK(r.hits == 1);
     CHECK(h.rules.health == 66);
     CHECK(count(&cap, LF_LOG_HIT) == 1);
-    CHECK(count(&cap, LF_LOG_DROP) == 4); /* the other four sensors: duplicates */
+    CHECK(count(&cap, LF_LOG_DROP) == LF_HUB_SENSORS - 1); /* the other sensors: duplicates */
     for (unsigned i = 0; i < cap.n; i++)
         if (cap.e[i].kind == LF_LOG_DROP)
             CHECK(cap.e[i].reason == LF_IGNORE_DUPLICATE);
@@ -337,9 +337,89 @@ static void test_haptic_down_and_respawn(void)
     CHECK(outputs_between(&h, ms + 13000, ms + 13100) == 0);
 }
 
+/* The per-receiver map: every sensor has a name, a zone and a horizontal
+ * facing; the vest ones are body, the two on the headband head, and the four
+ * compass sides are all covered. */
+static void test_sensor_table(void)
+{
+    CHECK(LF_HUB_SENSORS == 6);
+    CHECK(lf_hub_sensor(-1) == NULL && lf_hub_sensor(LF_HUB_SENSORS) == NULL);
+    unsigned facings = 0;
+    for (int s = 0; s < LF_HUB_SENSORS; s++) {
+        const lf_hub_sensor_desc *d = lf_hub_sensor(s);
+        CHECK(d != NULL && d->name != NULL && d->name[0] != 0);
+        CHECK(d->zone == lf_hub_sensor_zone(s));
+        CHECK(d->facing <= LF_FACING_RIGHT);
+        facings |= 1u << d->facing;
+        for (int t = s + 1; t < LF_HUB_SENSORS; t++)
+            CHECK(strcmp(d->name, lf_hub_sensor(t)->name) != 0);
+    }
+    CHECK(facings == 0xF);
+    CHECK(lf_hub_sensor_zone(LF_SENSOR_CHEST) == LF_ZONE_VEST);
+    CHECK(lf_hub_sensor_zone(LF_SENSOR_LEFT_SHOULDER) == LF_ZONE_VEST);
+    CHECK(lf_hub_sensor_zone(LF_SENSOR_RIGHT_SHOULDER) == LF_ZONE_VEST);
+    CHECK(lf_hub_sensor_zone(LF_SENSOR_BACK) == LF_ZONE_VEST);
+    CHECK(lf_hub_sensor_zone(LF_SENSOR_HEAD_FRONT) == LF_ZONE_HEAD);
+    CHECK(lf_hub_sensor_zone(LF_SENSOR_HEAD_BACK) == LF_ZONE_HEAD);
+    CHECK(lf_hub_sensor(LF_SENSOR_BACK)->facing == LF_FACING_REAR);
+    CHECK(lf_hub_sensor(LF_SENSOR_CHEST)->facing == LF_FACING_FRONT);
+}
+
+/* A shot that only the back receiver reads counts once, buzzes the vest (a
+ * body shot) and logs the sensor number 5; the receivers that read it are
+ * recorded in the pending mask for a future shield. */
+static void test_back_sensor_counts_as_body(void)
+{
+    capture cap = {.n = 0};
+    lf_hub h = make(&cap, 1, 0);
+    int only_back[1] = {LF_SENSOR_BACK};
+    uint32_t skew[1] = {0};
+    CHECK(shoot_and_feel(&h, (lf_ir_frame){9, 1, 0, 0}, only_back, skew, 1, 100000, NULL) == LF_OUT_VEST);
+    CHECK(count(&cap, LF_LOG_HIT) == 1);
+    CHECK(cap.e[0].sensor == LF_SENSOR_BACK);
+    CHECK(h.rules.health == 90);
+
+    /* the back and a headband receiver read one shot: a headshot, both in the mask */
+    capture cap2 = {.n = 0};
+    lf_hub h2 = make(&cap2, 1, 0);
+    int two[2] = {LF_SENSOR_BACK, LF_SENSOR_HEAD_BACK};
+    uint32_t skew2[2] = {0, 300};
+    uint8_t seen = 0;
+    {
+        uint16_t timings[LF_IR_TIMINGS];
+        lf_ir_frame f = {9, 1, 0, 1};
+        lf_ir_build_timings(&f, timings);
+        sim_edge e[2][64];
+        unsigned ne[2] = {0}, at[2] = {0};
+        uint32_t last = 0;
+        for (int i = 0; i < 2; i++) {
+            uint32_t end = sim_frame(e[i], &ne[i], timings, 100000 + skew2[i], 0);
+            if (end > last)
+                last = end;
+        }
+        int mask_seen = 0;
+        for (uint32_t t = 100000; t <= last + 200000; t += 1000) {
+            for (int i = 0; i < 2; i++)
+                while (at[i] < ne[i] && e[i][at[i]].t_us <= t) {
+                    lf_hub_edge(&h2, two[i], e[i][at[i]].level, e[i][at[i]].t_us);
+                    at[i]++;
+                }
+            lf_hub_poll(&h2, t);
+            if (h2.pending.valid && h2.pending.sensors == ((1u << LF_SENSOR_BACK) | (1u << LF_SENSOR_HEAD_BACK)))
+                mask_seen = 1;
+            seen |= lf_hub_outputs(&h2, t / 1000);
+        }
+        CHECK(mask_seen);
+    }
+    CHECK(seen == LF_OUT_HEAD);
+    CHECK(count(&cap2, LF_LOG_HIT) == 1);
+}
+
 int main(void)
 {
-    test_five_sensors_one_hit();
+    test_sensor_table();
+    test_six_sensors_one_hit();
+    test_back_sensor_counts_as_body();
     test_lossy_sensors_exact_count();
     test_down_event_and_ble_roundtrip();
     test_commands_and_config();

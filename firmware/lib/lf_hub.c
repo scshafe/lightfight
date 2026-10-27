@@ -24,7 +24,25 @@ void lf_hub_edge(lf_hub *h, int sensor, int level, uint32_t t_us)
         lf_rx_edge(&h->chan[sensor], level, t_us);
 }
 
-uint8_t lf_hub_sensor_zone(int sensor) { return sensor >= 3 ? LF_ZONE_HEAD : LF_ZONE_VEST; }
+static const lf_hub_sensor_desc s_sensors[LF_HUB_SENSORS] = {
+    [LF_SENSOR_CHEST] = {"chest", LF_ZONE_VEST, LF_FACING_FRONT},
+    [LF_SENSOR_LEFT_SHOULDER] = {"left shoulder", LF_ZONE_VEST, LF_FACING_LEFT},
+    [LF_SENSOR_RIGHT_SHOULDER] = {"right shoulder", LF_ZONE_VEST, LF_FACING_RIGHT},
+    [LF_SENSOR_HEAD_FRONT] = {"headband front", LF_ZONE_HEAD, LF_FACING_FRONT},
+    [LF_SENSOR_HEAD_BACK] = {"headband back", LF_ZONE_HEAD, LF_FACING_REAR},
+    [LF_SENSOR_BACK] = {"back", LF_ZONE_VEST, LF_FACING_REAR},
+};
+
+const lf_hub_sensor_desc *lf_hub_sensor(int sensor)
+{
+    return sensor >= 0 && sensor < LF_HUB_SENSORS ? &s_sensors[sensor] : NULL;
+}
+
+uint8_t lf_hub_sensor_zone(int sensor)
+{
+    const lf_hub_sensor_desc *d = lf_hub_sensor(sensor);
+    return d ? d->zone : LF_ZONE_VEST;
+}
 
 static void flush_pending(lf_hub *h)
 {
@@ -42,8 +60,10 @@ static void on_frame(lf_hub *h, int sensor, const lf_ir_frame *f, uint32_t now_m
     lf_log_entry e = {.t_ms = now_ms, .sensor = sensor, .frame = *f};
     if (hit.kind == LF_HIT_NONE) {
         if (hit.reason == LF_IGNORE_DUPLICATE && h->pending.valid && h->pending.shooter == f->shooter &&
-            h->pending.seq == f->seq)
+            h->pending.seq == f->seq) {
             h->pending.zones |= lf_hub_sensor_zone(sensor); /* the same shot, seen elsewhere */
+            h->pending.sensors |= (uint8_t)(1u << sensor);
+        }
         e.kind = LF_LOG_DROP;
         e.reason = hit.reason;
         emit(h, &e);
@@ -65,7 +85,7 @@ static void on_frame(lf_hub *h, int sensor, const lf_ir_frame *f, uint32_t now_m
         lf_haptic_start(&h->haptic, LF_CUE_DOWN, 0, now_ms); /* both motors: no zone to settle */
     } else {
         h->pending = (lf_hub_pending_cue){
-            .valid = true, .zones = lf_hub_sensor_zone(sensor), .shooter = f->shooter, .seq = f->seq,
+            .valid = true, .zones = lf_hub_sensor_zone(sensor), .sensors = (uint8_t)(1u << sensor), .shooter = f->shooter, .seq = f->seq,
             .cue = lf_haptic_classify_hit(hit.full_damage, h->rules.cfg.max_health),
             .due_ms = now_ms + LF_HUB_ZONE_SETTLE_MS,
         };

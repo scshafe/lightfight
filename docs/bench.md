@@ -149,7 +149,7 @@ and while it restarts the gate pull-down keeps the LED off (B1).
 
 ## B6 - hub bring-up
 
-Needs one hub board with the five receivers wired as in docs/hardware.md, and a
+Needs one hub board with the six receivers wired as in docs/hardware.md, and a
 second board running the blaster. Flash the hub (`idf-flash.sh hub ...`).
 
 1. With no blaster firing, watch the monitor for 30 s: no `hit`, and `bad`
@@ -163,9 +163,22 @@ second board running the blaster. Flash the hub (`idf-flash.sh hub ...`).
    receivers that also read it. The vibration motor buzzes for each hit.
 4. Fire at it until health reaches 0: the last hit is the one that puts the
    player down (buzzer sounds longer), further shots log `drop reason=dead`,
-   and after 10 s it respawns (status LED back on).
+   and after 10 s it respawns (the vest and headband motors double-tap). The hub has no status LED.
 5. Cover receiver 0 with a finger and fire at 1 m again: one of the other
-   receivers still counts it (this is why there are five).
+   receivers still counts it (this is why there are six).
+6. **Every receiver, one by one:** for each of sensor 0 to 5 (chest, left
+   shoulder, right shoulder, headband front, headband back, back), cover the
+   other five with tape and fire 5 shots from 1 m at the one left open, on its
+   axis. Each must count all 5, log `sensor=<n>` in the `hit` line (that is
+   the receiver that read it), and its `rx` line's `frames=` must rise by 5.
+   The motors follow the zone: the vest motor for 0, 1, 2 and 5, the headband
+   motor for 3 and 4. Receiver 5 is the new one: wiring on GPIO10 and the
+   harness are the first suspects if it is silent or prints `bad` bursts (the
+   XIAO's on-board LED, docs/hardware.md).
+7. **Facing:** the receivers face horizontally. Aim the blaster at each from
+   45 degrees to the side, level: the shot still counts (the visor leaves the
+   horizontal acceptance). Aim from 45 degrees above the axis, from where a
+   visor shades the face: the hit rate falls, which is the point.
 
 ## B6b - haptic cues
 
@@ -190,6 +203,49 @@ With the hub running (B6) and the blaster firing at it:
    (peak and what the 3.3 V rail does while both run, as in the kill).
 7. Each motor's gate is pulled low at reset: with the board held in reset
    (RST button) neither motor runs.
+
+## B6c - the visor, with and without (midday sun)
+
+Needs the hub with a visor on one receiver, a blaster, a tape measure and a
+clear sky around local noon, the sun high (above about 45 degrees: the
+shading is what is being measured). The goal: the visor gives back range the
+sun takes away, without losing oblique hits.
+
+1. **Opacity first:** cover one receiver's whole face with a flat sample of
+   the printed roof (1.2 mm) and fire 30 shots from 1 m: zero hits. If any
+   get through the print passes 940 nm: paint it matte black, or change
+   filament, before going on.
+2. **Range with and without.** Mount one receiver as in docs/hardware.md facing
+   horizontally toward the blaster, the other five covered with tape. The
+   blaster fires level at it from 5, 10, 15, 20, 30, 40 and 50 m. At each
+   distance fire 30 shots with the visor on and 30 with the visor off, in
+   the order on, off, off, on (to cancel drift in the sun and the
+   battery), score each with
+   `python3 tools/lfhits.py --expect hit blaster.log hub.log`. Note the time,
+   the sun's elevation (a phone app), the sky, the battery, and the `stuck` and
+   `bad` counts of the `rx` lines.
+3. Report the longest distance with 95% hits, with and without the visor, and
+   the ratio. Expected: with the visor the 95% distance is farther; if it is
+   not, say so, with `stuck` counts, because that is the finding.
+4. **Oblique hits:** at 10 m aim the blaster at the receiver from 30 and from
+   45 degrees to the side, level, with the visor on and off: the hit rates
+   must agree within 5 points (nothing in front of the face at the sides).
+5. Record the results in the PR, with the table: distance, visor, shots,
+   counted, `stuck`.
+
+## B6d - optional: a TSSP-family receiver on the headband (comparison only)
+
+Not the default part and not to be adopted from this step alone. The Vishay
+TSSP family (for example the TSSP58038, a 5 x 2.8 x 6.95 mm, +-45 degree,
+2.5-5.5 V part) is described as a light-barrier receiver for continuous 38 kHz
+or bursts; I could not read its burst-length limits, and I could not identify a
+part called "TSSP-ZA", so the owner picks the exact number. Do it only if its
+datasheet allows our marks (560 us bursts, a 3000 us header, spaces of 560 and
+1690 us): then swap it onto sensor 3 (headband front) beside a TSOP on sensor
+4 and fire 100 shots at both from 1, 5 and 15 m: compare `frames=` in the
+`rx` lines (valid frames read by each) and `bad`. It must read all of our
+frames before it counts for anything; if it does not decode them, it is
+unsuitable and the step ends there. Record both parts' numbers.
 
 ## B7 - range and reliability
 
@@ -298,7 +354,7 @@ Owner decision 2026-10-27. The goal: 75 m feasible and 50 m reliable outdoors.
 Needs the blaster with the lens and tube fitted (docs/hardware.md), the cap
 off, an open site with a straight line of 75 m, two hubs (or one hub moved
 between runs), a 100 m tape or a rangefinder, and a sunny day with some shade, a lux meter (a phone app will do) and a bench supply.
-Sun hoods and a back sensor are not part of this build, so run it as built.
+Run it with the visors fitted (B6c), the hub on a vest worn facing the blaster.
 
 1. Current first: run B2 for the finished blaster (lens fitted) at 4.2, 3.7 and
    3.3 V and write the three peak currents in the table's header row; every

@@ -176,12 +176,13 @@ materials") fixes the shape, not the part.
 
 ## Vest hub (M6 onward)
 
-XIAO ESP32-C3 again; five 38 kHz receiver modules (TSOP38238 class, 3.3 V),
-each with its own 100 nF decoupling capacitor and a 100 ohm series resistor
-in the supply, on a wired harness (chest, left and right shoulder, two on the
-headband); two coin vibration motors, one in the vest and one in the headband,
-each behind its own MOSFET with a flyback diode; a buzzer; status LEDs. Same
-battery arrangement as the blaster.
+XIAO ESP32-C3 again; six 38 kHz receiver modules (TSOP38238 class, 3.3 V),
+each with its own 100 nF decoupling capacitor, a 100 ohm series resistor in
+the supply and a sun visor (below), on a wired harness: chest, back of the
+torso, left and right shoulder, and headband front and back; two coin
+vibration motors, one in the vest and one in the headband, each behind its own
+MOSFET with a flyback diode; a buzzer. Same battery arrangement as the blaster.
+The hub has no status LED: see "Hub pins".
 
 The motors, vest and headband alike:
 
@@ -201,17 +202,81 @@ only, a body shot the vest motor only; the kill and the respawn buzz both
 webbing, not on the skull's bone, so the cue is felt, not painful.
 
 Hub pins (defaults in `Kconfig.projbuild`, XIAO labels): receivers on GPIO3,
-GPIO2, GPIO8, GPIO6, GPIO7 (chest, left shoulder, right shoulder, headband
-front, headband back; GPIO2 and GPIO8 are strapping pins that must be high at
-reset, which a receiver's idle-high output is), battery sense GPIO4 (D2, same divider as the
-blaster),
-vest motor gate GPIO21 (D6), headband motor gate GPIO5 (D3), buzzer GPIO20 (D7),
-status LED GPIO10 (D10).
+GPIO2, GPIO8, GPIO6, GPIO7, GPIO10 (sensor numbers 0 to 5: chest, left
+shoulder, right shoulder, headband front, headband back, back of the torso;
+the number is the `sensor=` in the hit log and the index in `lf_hub.c`'s
+table, which also records each receiver's zone and facing; GPIO2 and GPIO8 are
+strapping pins that must be high at reset, which a receiver's idle-high output
+is), battery sense GPIO4 (D2, same divider as the blaster),
+vest motor gate GPIO21 (D6), headband motor gate GPIO5 (D3), buzzer GPIO20 (D7).
+
+**Why there is no status LED on the hub any more:** the XIAO ESP32-C3 has 11
+usable pins (D0-D10). The hub needs 6 receivers, the battery sense, two motor
+gates, the buzzer and, until now, a status LED: 11 with the BOOT button on
+GPIO9, so the sixth receiver needs a pin from one of those. The status LED
+was the least useful (it showed "alive", which the phone's HUD and the motors
+already show) so it gave its GPIO10 to the back receiver (Kconfig
+`LF_PIN_STATUS_LED` defaults to -1 on the hub). Alternatives I did not take:
+wiring the two headband receivers to one pin (loses front/back, which the
+zone map keeps for a future shield) or an I2C expander (two pins and a part).
+If the XIAO's on-board user LED is on GPIO10 it loads the receiver line: check
+the XIAO schematic; it should only blink on received edges, but remove it from
+the line if the bench shows `bad` bursts on sensor 5.
 A receiver module's output is open-collector-like with an internal pull-up and
 idles high; keep each harness lead short or shielded, as it carries 560 us
 edges.
 
 The pair button is the XIAO's own BOOT button (GPIO9); nothing to wire.
+
+## Sun visors (owner decision 2026-10-27)
+
+A TSOP-class receiver's threshold rises from about 0.1 to about 3 mW/m^2 in
+sunlight, so a receiver facing the sun loses most of its range (docs/design.md,
+"Optics"). A visor shades the high sun without costing the oblique hits that a
+tube would:
+
+- an asymmetric brim: a flat roof over the receiver's face that shades every
+  elevation above about 30 degrees, widened on both sides by 45-degree fans so
+  that holds for a sun up to 45 degrees to either side, with **nothing in front
+  of the face at the sides**: the receiver's +-45 degree horizontal
+  directivity (TSOP datasheet) is untouched. No narrow tube: a tube costs
+  every shot that is not straight on;
+- every receiver faces **horizontally**. The headband receivers face front and
+  back, never upward; the shoulder receivers face outward (left and right),
+  mounted vertical on the strap's outer edge;
+- the source is `hardware/visor.scad` (OpenSCAD, parametric; I could not render
+  it here, so open it once and check the preview against the table below).
+  `tools/visor_check.py` reads its numbers and traces rays from the face to
+  confirm the shading (a test in CI): the face is fully shaded from every sun
+  more than 30 degrees up and within 45 degrees of the axis, fully open at the
+  horizon, and half lit at 15 degrees.
+
+| Dimension | Value | Note |
+|-----------|-------|------|
+| Receiver (datasheet, minicast) | 5.0 wide, 6.95 high | check the drawing of the part bought |
+| Pocket | 5.4 wide, 7.15 high, 5.0 deep | 0.2 mm clearance each side |
+| Wall and roof | 1.2 mm | opaque at 940 nm: see below |
+| Brim | 12.7 mm forward of the face | height of the face over tan 30, plus 0.3 mm |
+| Brim width | 5.4 at the face, about 23 at the widest | 45-degree fans each side |
+| Rear tab | 18 wide, 6 long, 1.6 thick | two 3.0 x 1.8 mm slots for zip tie or thread |
+| Face | open, flush with the front edge of the side walls | nothing in front of the face but the roof |
+
+- **Material and printing:** opaque black PETG or ABS, 0.2 mm layers, 4
+  perimeters, roof on top. **Many black filaments pass 940 nm light:** bench
+  step B6c checks a sample before the visors are used; paint the roof matte
+  black, inside and out, if it does not block.
+- **Mounting:** the receiver goes into the pocket from below with its leads
+  down and out through the notch; hold it with a drop of hot glue behind, not on
+  the lens. The visor sits on the webbing with its tab, zip tie or stitched
+  through the slots.
+  - chest: centre of the sternum, facing forward;
+  - back: between the shoulder blades, facing backward;
+  - shoulders: on the outer edge of each strap, vertical, facing left and
+    right;
+  - headband: one at the forehead centre facing forward, one at the back of
+    the head facing backward, both vertical, never tilted up; the visor makes
+    the headband receivers about 13 mm deeper, so keep them off the brow.
+  Keep the harness lead short and routed down, away from the lens.
 
 ## Prototype shopping list (2 players, with spares)
 
@@ -231,8 +296,10 @@ The pair button is the XIAO's own BOOT button (GPIO9); nothing to wire.
 | Resistors 220 k (battery divider: 2 per board, so 12) | 14 |
 | Resistors 47, 68, 100, 150, 220, 330 ohm 1/4 W, 4 of each (tuning the shotgun LED's range) | 24 |
 | Resistor 10 k (trigger C pull-up; the gate pull-downs of the new MOSFETs use the 100 k) | 4 |
-| 38 kHz IR receiver module, TSOP38238 class | 14 |
-| Capacitors, 100 nF ceramic (receivers and battery sense) | 20 |
+| 38 kHz IR receiver module, TSOP38238 class (6 per vest, 2 vests, plus spares) | 16 |
+| Optional: a Vishay TSSP-family receiver for the headband comparison B6d (see the note there) | 2 |
+| Black PETG or ABS filament for 16 visors (about 30 g) | 1 spool |
+| Capacitors, 100 nF ceramic (receivers and battery sense) | 24 |
 | Tact switches (per blaster: A, B, C, reload; plus spares) | 14 |
 | Coin vibration motor 3 V, with 1N4148 diode and a spare MOSFET each (vest and headband: 2 per player, plus a spare) | 5 |
 | Lens, 40 mm diameter, about 50 mm focal length, PMMA asphere or Fresnel (1 per blaster plus 2 spares; pick one with a datasheet focal length) | 4 |

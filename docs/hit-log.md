@@ -24,6 +24,7 @@ Use made-up shooter ids and callsigns in any log that is attached to a PR.
 - **Hit rate** = shots counted / shots fired, for shots aimed at the target.
 - **False hits** = hits with no shot, or any hit while aiming away. Must be 0.
 - **Duplicates suppressed** are good: several sensors read one shot.
+- **Sensor numbers** are the hub's receivers: 0 chest, 1 left shoulder, 2 right shoulder, 3 headband front, 4 headband back, 5 back of the torso (docs/hardware.md).
 - **`bad` bursts** are noise or collisions rejected by the timing and CRC
   checks. A few are normal indoors with sun and lamps; a stream means a
   receiver is saturated or a sensor is picking up something else.
