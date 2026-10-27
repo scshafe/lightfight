@@ -20,8 +20,8 @@ materials") fixes the shape, not the part.
   The sink is the classic two-transistor limiter, on the LED's low side:
 
   ```
-  BAT+ --+-- LED anode..cathode -- Q1 collector (BC817-40, NPN, SOT-23)
-         +-- 100 uF + 100 nF to GND, close to the LED
+  BAT+ --[PTC 0.1 A hold]--+-- LED anode..cathode -- Q1 collector (BC817-40, NPN, SOT-23)
+                           +-- 100 uF + 100 nF to GND, close to the LED
   GPIO(LF_PIN_IR_LED) --[680 R]--+-- Q1 base
                                  +-- Q2 collector (BC847, NPN, SOT-23)
                                  +-- [100 k] -- GND   (base pull-down)
@@ -52,22 +52,65 @@ materials") fixes the shape, not the part.
   intensity against a 200 mA nominal (0.85 dB); if the bench shows the current
   has a margin under 200 mA in the cold, Rs can go down (3.3 ohm gives 197 mA
   nominal) but check it at 0 C first. Q1 needs headroom of
-  Vf_max + 0.65 V + Vce(sat) = about 1.6 + 0.65 + 0.2 = 2.5 V, so the current
-  stays constant down to about 2.5 V (3.3 V is the lowest the bench checks). Q1 dissipates up to
+  Vf_max + 0.65 V + Vce(sat) = about 1.6 + 0.65 + 0.2 = 2.5 V at the LED node,
+  so with the PTC's 0.36 V the current stays constant down to a cell of about
+  2.8 V (3.3 V is the lowest the bench checks). Q1 dissipates up to
   (4.2 - 1.3 - 0.65) x 0.2 = 0.45 W for 13 us pulses, 3.4% of the time at
   most: about 15 mW mean, well inside a SOT-23. Rs dissipates 0.13 W in a
   pulse, a few mW mean. Q1's base drive is (3.3 - 1.4) / 680 = 2.8 mA, enough
   for hFE 100 at 200 mA; Q2 sinks the excess. These figures come from typical
   datasheet values: **recompute them from the datasheets of the parts bought and
   confirm by measurement** (bench steps B2, B11).
-- **A fault the firmware cannot cover:** if Q1 fails short, the LED sees the cell
-  through Rs alone, about 0.6 A, continuously. The 1 A resettable fuse does not
-  trip on it and the gate pull-down does not apply. The same single fault was
-  there with a MOSFET and a series resistor (about 170 mA continuous). For the
-  prototype I accept it: the driver is two parts on a rigid board; if the owner
-  wants it covered, a 250 mA resettable fuse in the LED branch (a 0.5 A hold
-  part is too large) would do it, at the cost of its resistance and a hold
-  current margin below 200 mA pulses; I have not added it.
+- **A single fault in the sink, and the PTC in the LED branch:** if Q1 fails
+  short, the LED sees the cell through Rs alone: 0.76 A at 4.2 V, 0.63 A at
+  3.7 V, 0.53 A at 3.3 V, continuously (about 0.6 A). If Rs is shorted, Q2 loses
+  its sense voltage and Q1 is limited only by its base drive, 0.4 to 0.7 A.
+  Neither the firmware gate nor the 1 A pack fuse covers it, and the LED's
+  continuous rating is 100 mA. The design's safety section requires a hardware
+  current limit that holds under a single fault, so the LED branch has its own
+  resettable fuse (PTC) from BAT+ to the LED node (diagram above). I checked
+  the owner's 250 mA figure against the numbers and the result is that a
+  smaller part fits better; typical datasheet values, to be confirmed with the
+  chosen part's curves and by bench B2:
+  - **What the PTC carries in normal use.** The 100 uF capacitor on the LED
+    side supplies the 38 kHz pulses (2.4 uC each, a 24 mV ripple); the PTC only
+    supplies their mean. In a mark the mean is 181 mA x 50% carrier = 90 mA,
+    for 17 ms (59 ms at most) per frame; over time it is 90 mA x
+    sqrt(0.068) = about 23 mA RMS at four frames a second. A PTC heats on
+    the mean square over seconds, not on a 59 ms burst, so the hold current
+    needs to cover about 25 mA at the hottest, not 200 mA: the 200 mA pulses
+    never pass through it.
+  - **Why not 250 mA hold.** A PTC's trip current is about twice its hold, and
+    a part trips quickly only at several times its hold. With a 250 mA part
+    (trip about 0.5 A, series resistance 1-2 Ω) the Q1-short fault current is
+    about 0.5 A at 4.2 V and 0.4 A at 3.7 V, 0.35 A at 3.3 V: 1.4 to 2 times
+    the hold, below or at the trip current, where the trip time is tens of
+    seconds to minutes or the part does not trip at all. That fails
+    "trips in seconds".
+  - **The part: hold 0.10 A (0.10-0.125 A), trip 0.20-0.25 A, series
+    resistance about 2-6 Ω (4 Ω assumed).** Mean 90 mA in a mark is under the
+    hold and the RMS is 25 mA, so it does not trip in use, even at 60 C where
+    the hold falls to about 65%. The 4 Ω adds 0.36 V at the mean current, so
+    the LED node has 2.9 V at a 3.3 V cell, against the 2.45 V the sink needs.
+    The Q1-short fault current with the PTC's 4 Ω in series (the PTC is a
+    series resistor until it trips) is 0.36 A at 4.2 V, 0.30 A at 3.7 V and
+    0.25 A at 3.3 V, which is 2.5 to 3.6 times the hold. A small PTC at that
+    multiple typically trips in a few seconds up to tens of seconds; at
+    3.3 V it is the slowest. After it trips it passes about 10-20 mA until the
+    power is removed and it cools; the blaster then looks dead until a
+    power cycle (a few minutes with the cell disconnected).
+  - **Limits.** A PTC will not protect the LED itself: at 0.25-0.36 A for
+    seconds the LED is far over its continuous rating and may be damaged or
+    fail; what the PTC protects is the person in front of it (eye safety,
+    docs/design.md "Safety"), the wiring and the cell. If bench B2 shows a trip
+    time over 20 s at any cell voltage, a PTC is not enough. The alternative
+    is an adjustable current-limit load switch with thermal shutdown (the
+    TPS2553 class, about $0.6) in the same place, limit about 150 mA with the
+    capacitor carrying the pulses: it clamps the fault at a flat 150 mA at once
+    instead of waiting to heat, and retries with a tiny duty. I have not
+    added it.
+  - **The 250 mA part from the owner's note** is on the shopping list too, to
+    be tried only if the 0.1 A part trips in normal use.
 - **Lens and tube (owner decision 2026-10-27):** a 40 mm diameter lens of about
   50 mm focal length, PMMA asphere or Fresnel, with the LED at the focus on
   the lens axis, 50 mm behind the lens (a Fresnel's focal length is set by its
@@ -177,6 +220,8 @@ The pair button is the XIAO's own BOOT button (GPIO9); nothing to wire.
 | Seeed XIAO ESP32-C3 | 6 |
 | 1S LiPo 3.7 V, 1000-1500 mAh, with protection circuit and connector | 5 |
 | Resettable fuse / PTC, about 1 A hold | 5 |
+| Resettable fuse / PTC, 0.1 A hold, 0.2-0.25 A trip, 6 V or more (the LED branch; 1206 or radial) | 8 |
+| Resettable fuse / PTC, 0.25 A hold (the fallback, and a comparison for B2) | 4 |
 | 940 nm IR LED, 5 mm (TSAL6200 or equivalent; needs 200 mA repetitive-pulse rating at 50% duty) | 6 |
 | 940 nm IR LED, 5 mm, wide-angle (half-angle 45 degrees or more) for the shotgun | 4 |
 | Logic-level N-MOSFET, SOT-23 (AO3400A or equivalent; the wide LED and the motors, no longer the main LED) | 12 |
