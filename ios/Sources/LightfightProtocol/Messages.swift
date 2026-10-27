@@ -6,71 +6,114 @@ public enum ProtocolError: Error, Equatable {
 
 public let protocolVersion: UInt8 = 1
 
-public struct Config: Equatable {
-    public static let length = 23
-    public var player: UInt8, team: UInt8, damageCode: UInt8
-    public var friendlyFire: Bool
-    public var maxHealth: UInt16, magazine: UInt16
-    public var reloadMs: UInt16, respawnMs: UInt16, fireIntervalMs: UInt16
-    public var damageTable: [UInt8]
+/// One firing mode's settings (light, heavy, shotgun).
+public struct Mode: Equatable {
+    public var damageCode: UInt8
+    public var autoReload: Bool
+    public var magazine: UInt16, reloadMs: UInt16, fireIntervalMs: UInt16
 
-    public init(player: UInt8, team: UInt8, damageCode: UInt8, friendlyFire: Bool,
-                maxHealth: UInt16, magazine: UInt16, reloadMs: UInt16, respawnMs: UInt16,
-                fireIntervalMs: UInt16, damageTable: [UInt8]) {
-        self.player = player; self.team = team; self.damageCode = damageCode
-        self.friendlyFire = friendlyFire; self.maxHealth = maxHealth; self.magazine = magazine
-        self.reloadMs = reloadMs; self.respawnMs = respawnMs
-        self.fireIntervalMs = fireIntervalMs; self.damageTable = damageTable
+    public init(damageCode: UInt8, autoReload: Bool, magazine: UInt16, reloadMs: UInt16,
+                fireIntervalMs: UInt16) {
+        self.damageCode = damageCode; self.autoReload = autoReload; self.magazine = magazine
+        self.reloadMs = reloadMs; self.fireIntervalMs = fireIntervalMs
+    }
+
+    /// The match defaults, in the order light, heavy, shotgun (docs/design.md).
+    public static let defaults: [Mode] = [
+        Mode(damageCode: 0, autoReload: true, magazine: 30, reloadMs: 2000, fireIntervalMs: 250),
+        Mode(damageCode: 3, autoReload: false, magazine: 5, reloadMs: 3000, fireIntervalMs: 1500),
+        Mode(damageCode: 2, autoReload: false, magazine: 2, reloadMs: 3500, fireIntervalMs: 1000),
+    ]
+}
+
+public let modeCount = 3
+
+public struct Config: Equatable {
+    public static let length = 40
+    public var player: UInt8, team: UInt8
+    public var friendlyFire: Bool
+    public var maxHealth: UInt16, respawnMs: UInt16
+    public var damageTable: [UInt8]
+    public var modes: [Mode]
+
+    public init(player: UInt8, team: UInt8, friendlyFire: Bool, maxHealth: UInt16,
+                respawnMs: UInt16, damageTable: [UInt8], modes: [Mode]) {
+        self.player = player; self.team = team; self.friendlyFire = friendlyFire
+        self.maxHealth = maxHealth; self.respawnMs = respawnMs
+        self.damageTable = damageTable; self.modes = modes
     }
 
     public func encode() throws -> Data {
-        guard player <= 63, team <= 7, damageCode <= 7, damageTable.count == 8 else {
+        guard player <= 63, team <= 7, damageTable.count == 8, modes.count == modeCount,
+              modes.allSatisfy({ $0.damageCode <= 7 }) else {
             throw ProtocolError.range
         }
         var w = Writer()
-        w.u8(protocolVersion); w.u8(player); w.u8(team); w.u8(damageCode)
-        w.u8(friendlyFire ? 1 : 0)
-        w.u16(maxHealth); w.u16(magazine); w.u16(reloadMs); w.u16(respawnMs)
-        w.u16(fireIntervalMs)
+        w.u8(protocolVersion); w.u8(player); w.u8(team); w.u8(friendlyFire ? 1 : 0)
+        w.u16(maxHealth); w.u16(respawnMs)
         damageTable.forEach { w.u8($0) }
+        for m in modes {
+            w.u8(m.damageCode); w.u8(m.autoReload ? 1 : 0)
+            w.u16(m.magazine); w.u16(m.reloadMs); w.u16(m.fireIntervalMs)
+        }
         return w.data
     }
 
     public static func decode(_ d: Data) throws -> Config {
         var r = try Reader(d, length: length)
-        let player = r.u8(), team = r.u8(), code = r.u8(), ff = r.u8()
-        guard player <= 63, team <= 7, code <= 7, ff <= 1 else { throw ProtocolError.range }
-        let mh = r.u16(), mg = r.u16(), rl = r.u16(), rs = r.u16(), fi = r.u16()
+        let player = r.u8(), team = r.u8(), ff = r.u8()
+        guard player <= 63, team <= 7, ff <= 1 else { throw ProtocolError.range }
+        let mh = r.u16(), rs = r.u16()
         let table = (0..<8).map { _ in r.u8() }
-        return Config(player: player, team: team, damageCode: code, friendlyFire: ff == 1,
-                      maxHealth: mh, magazine: mg, reloadMs: rl, respawnMs: rs,
-                      fireIntervalMs: fi, damageTable: table)
+        var modes: [Mode] = []
+        for _ in 0..<modeCount {
+            let code = r.u8(), ar = r.u8()
+            guard code <= 7, ar <= 1 else { throw ProtocolError.range }
+            modes.append(Mode(damageCode: code, autoReload: ar == 1, magazine: r.u16(),
+                              reloadMs: r.u16(), fireIntervalMs: r.u16()))
+        }
+        return Config(player: player, team: team, friendlyFire: ff == 1, maxHealth: mh,
+                      respawnMs: rs, damageTable: table, modes: modes)
     }
 }
 
 public struct State: Equatable {
-    public static let length = 7
-    public static let active: UInt8 = 1, alive: UInt8 = 2, reloading: UInt8 = 4
+    public static let length = 12
+    public static let active: UInt8 = 1, alive: UInt8 = 2, reloading: UInt8 = 4, disabled: UInt8 = 8
     public var flags: UInt8
-    public var health: UInt16, ammo: UInt16
+    public var health: UInt16
+    public var ammo: [UInt16]         // light, heavy, shotgun
+    public var reloadingMask: UInt8   // bit m: mode m is reloading
     public var batteryPct: UInt8
 
-    public init(flags: UInt8, health: UInt16, ammo: UInt16, batteryPct: UInt8) {
-        self.flags = flags; self.health = health; self.ammo = ammo; self.batteryPct = batteryPct
+    /// The mode fired last (flag bits 4-5): 0 light, 1 heavy, 2 shotgun.
+    public var lastMode: UInt8 { flags >> 4 }
+
+    public init(flags: UInt8, health: UInt16, ammo: [UInt16], reloadingMask: UInt8, batteryPct: UInt8) {
+        self.flags = flags; self.health = health; self.ammo = ammo
+        self.reloadingMask = reloadingMask; self.batteryPct = batteryPct
     }
 
+    static func flagsOK(_ f: UInt8) -> Bool { f <= 0x2F && f >> 4 <= 2 }
+
     public func encode() throws -> Data {
-        guard flags <= 15, batteryPct <= 100 else { throw ProtocolError.range }
+        guard State.flagsOK(flags), ammo.count == modeCount, reloadingMask <= 7, batteryPct <= 100 else {
+            throw ProtocolError.range
+        }
         var w = Writer()
-        w.u8(protocolVersion); w.u8(flags); w.u16(health); w.u16(ammo); w.u8(batteryPct)
+        w.u8(protocolVersion); w.u8(flags); w.u16(health)
+        ammo.forEach { w.u16($0) }
+        w.u8(reloadingMask); w.u8(batteryPct)
         return w.data
     }
 
     public static func decode(_ d: Data) throws -> State {
         var r = try Reader(d, length: length)
-        let flags = r.u8(), health = r.u16(), ammo = r.u16(), battery = r.u8()
-        guard flags <= 15, battery <= 100 else { throw ProtocolError.range }
-        return State(flags: flags, health: health, ammo: ammo, batteryPct: battery)
+        let flags = r.u8(), health = r.u16()
+        let ammo = (0..<modeCount).map { _ in r.u16() }
+        let mask = r.u8(), battery = r.u8()
+        guard flagsOK(flags), mask <= 7, battery <= 100 else { throw ProtocolError.range }
+        return State(flags: flags, health: health, ammo: ammo, reloadingMask: mask, batteryPct: battery)
     }
 }
 

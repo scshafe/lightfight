@@ -33,12 +33,39 @@ materials") fixes the shape, not the part.
   resistor gives about 60 mA. These figures come from my reading of typical
   datasheet values; **recompute them from the datasheet of the part actually
   bought and confirm by measurement** (bench step B2).
-- **Inputs (pins moved by the battery divider):** trigger and reload tact switches to ground on `LF_PIN_TRIGGER`
-  and `LF_PIN_RELOAD` (internal pull-ups). A status LED with its own 330 ohm
+- **Shotgun emitter:** a second 940 nm LED, wide-angle (5 mm, half-angle
+  45-60 degrees on the datasheet, no lens; candidate: a TSAL4400-class part or
+  any 940 nm LED whose datasheet gives a half-angle of 45 degrees or more),
+  on its *own* MOSFET and gate pull-down, wired exactly like the narrow LED but
+  with a larger resistor so it decodes only at close range:
+
+  ```
+  BAT+ --[R_wide]--|>|-- wide LED --+-- MOSFET drain (source to GND)
+  GPIO(LF_PIN_IR_WIDE) --[100 R]-- gate --+-- [100 k] -- GND
+  ```
+
+  `R_wide` sets both the current and the range. Start with 100 ohm (about
+  28 mA at 4.2 V, 20 mA at 3.3 V, with V_f about 1.3 V) and tune on the bench
+  (B10) with the assortment in the shopping list: 68 ohm for more range, 150,
+  220 or 330 ohm for less. Never go below the value that keeps the current
+  within the LED's continuous rating at 4.2 V (`R >= (4.2 - V_f - 0.1) / I_max`).
+  Eye safety: docs/design.md, "Safety". The firmware shares one safety gate
+  between the two LEDs; only one sends at a time.
+- **Inputs:** four tact switches to ground (internal pull-ups): trigger A
+  (light) `LF_PIN_TRIGGER`, trigger B (heavy) `LF_PIN_TRIGGER_B`, trigger C
+  (shotgun) `LF_PIN_TRIGGER_C` and reload `LF_PIN_RELOAD`. Trigger C is on
+  GPIO2, a strapping pin that must be high at reset, so give it an external
+  10 k pull-up to 3.3 V. Reload: a short press reloads the mode fired last,
+  held 0.8 s reloads every mode.
+- **Buzzer:** a *passive* piezo element (it needs a tone, which the firmware
+  makes with the LEDC timer) between `LF_PIN_BUZZER` and ground, for the heavy
+  shot's sound. Louder: a small piezo with its resonant disc, driven through a
+  logic MOSFET like the motor; the first build does without. A status LED with its own 330 ohm
   resistor on `LF_PIN_STATUS_LED`.
 - **Pins (defaults in `firmware/idf/main/Kconfig.projbuild`, XIAO labels):**
-  IR gate GPIO3 (D1), battery sense GPIO4 (D2), trigger GPIO5 (D3), reload
-  GPIO6 (D4), status LED GPIO10 (D10). GPIO8/9 and GPIO2 are strapping pins: avoid them.
+  IR gate GPIO3 (D1), battery sense GPIO4 (D2), trigger A GPIO5 (D3), reload
+  GPIO6 (D4), trigger B GPIO7 (D5), trigger C GPIO2 (D0, with the pull-up), wide
+  LED gate GPIO21 (D6), buzzer GPIO20 (D7), status LED GPIO10 (D10). GPIO8/9 and GPIO2 are strapping pins: avoid them.
 - **Battery sense:** two equal 220 k resistors in series from the cell's
   positive (after the fuse) to ground, the midpoint to `LF_PIN_BATTERY`
   (GPIO4, D2, an ADC1 pin) with a 100 nF capacitor to ground. The ADC sees half
@@ -79,14 +106,18 @@ The pair button is the XIAO's own BOOT button (GPIO9); nothing to wire.
 | 1S LiPo 3.7 V, 1000-1500 mAh, with protection circuit and connector | 5 |
 | Resettable fuse / PTC, about 1 A hold | 5 |
 | 940 nm IR LED, 5 mm (TSAL6200 or equivalent) | 6 |
-| Logic-level N-MOSFET, SOT-23 (AO3400A or equivalent) | 8 |
+| 940 nm IR LED, 5 mm, wide-angle (half-angle 45 degrees or more) for the shotgun | 4 |
+| Logic-level N-MOSFET, SOT-23 (AO3400A or equivalent) | 12 |
 | Resistors: 27 ohm 1/4 W; 100 ohm; 100 k; 330 ohm (a handful of each, 10 per value) | |
 | Resistors 220 k (battery divider: 2 per board, so 12) | 14 |
+| Resistors 47, 68, 100, 150, 220, 330 ohm 1/4 W, 4 of each (tuning the shotgun LED's range) | 24 |
+| Resistor 10 k (trigger C pull-up; the gate pull-downs of the new MOSFETs use the 100 k) | 4 |
 | 38 kHz IR receiver module, TSOP38238 class | 14 |
 | Capacitors, 100 nF ceramic (receivers and battery sense) | 20 |
-| Tact switches | 10 |
+| Tact switches (per blaster: A, B, C, reload; plus spares) | 14 |
 | Coin vibration motor 3 V, with 1N4148 diode and a spare MOSFET each | 3 |
-| Piezo buzzer, 3 V | 3 |
+| Piezo buzzer, 3 V (the hub's, a plain buzzer element) | 3 |
+| Passive piezo element for the blaster's sound (needs a tone) | 3 |
 | LEDs for status, 3 mm | 6 |
 | USB-C cables (data, not charge-only) | 3 |
 | Breadboard or perfboard, jumper wire, heat shrink, solder | 1 set |

@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../lib/lf_ble.h"
+#include "ble_rows.h"
 #include "lf_test.h"
 
 #ifndef BLE_VECTORS
@@ -28,10 +29,13 @@ static int split(char *line, char *f[], int max)
 /* field by field: the structs have padding */
 static bool same_config(const lf_ble_config *a, const lf_ble_config *b)
 {
-    return a->player == b->player && a->team == b->team && a->damage_code == b->damage_code &&
-           a->friendly_fire == b->friendly_fire && a->max_health == b->max_health &&
-           a->magazine == b->magazine && a->reload_ms == b->reload_ms &&
-           a->respawn_ms == b->respawn_ms && a->fire_interval_ms == b->fire_interval_ms &&
+    for (int i = 0; i < LF_BLE_MODES; i++)
+        if (a->mode[i].damage_code != b->mode[i].damage_code || a->mode[i].auto_reload != b->mode[i].auto_reload ||
+            a->mode[i].magazine != b->mode[i].magazine || a->mode[i].reload_ms != b->mode[i].reload_ms ||
+            a->mode[i].fire_interval_ms != b->mode[i].fire_interval_ms)
+            return false;
+    return a->player == b->player && a->team == b->team && a->friendly_fire == b->friendly_fire &&
+           a->max_health == b->max_health && a->respawn_ms == b->respawn_ms &&
            !memcmp(a->damage_table, b->damage_table, 8);
 }
 
@@ -54,20 +58,15 @@ static void test_vectors(void)
         for (int i = 1; i < n - 1; i++)
             v[i] = strtoul(f[i], NULL, 10);
         if (!strcmp(f[0], "config")) {
-            lf_ble_config m, d;
-            m.player = (uint8_t)v[1]; m.team = (uint8_t)v[2]; m.damage_code = (uint8_t)v[3];
-            m.max_health = (uint16_t)v[4]; m.magazine = (uint16_t)v[5];
-            m.reload_ms = (uint16_t)v[6]; m.respawn_ms = (uint16_t)v[7];
-            m.fire_interval_ms = (uint16_t)v[8]; m.friendly_fire = v[9] != 0;
-            for (int i = 0; i < 8; i++)
-                m.damage_table[i] = (uint8_t)v[10 + i];
+            lf_ble_config m = row_config(v), d;
             CHECK(lf_ble_encode_config(&m, got) == wn && !memcmp(got, want, wn));
             CHECK(lf_ble_decode_config(want, wn, &d) && same_config(&m, &d));
         } else if (!strcmp(f[0], "state")) {
-            lf_ble_state m = {(uint8_t)v[1], (uint16_t)v[2], (uint16_t)v[3], (uint8_t)v[4]}, d;
+            lf_ble_state m = row_state(v), d;
             CHECK(lf_ble_encode_state(&m, got) == wn && !memcmp(got, want, wn));
             CHECK(lf_ble_decode_state(want, wn, &d) && m.flags == d.flags && m.health == d.health &&
-                  m.ammo == d.ammo && m.battery_pct == d.battery_pct);
+                  !memcmp(m.ammo, d.ammo, sizeof m.ammo) && m.reloading_mask == d.reloading_mask &&
+                  m.battery_pct == d.battery_pct);
         } else if (!strcmp(f[0], "event")) {
             lf_ble_event m = {(uint8_t)v[1], (uint16_t)v[2], (uint8_t)v[3], (uint8_t)v[4],
                               (uint8_t)v[5], (uint16_t)v[6], (uint32_t)v[7]}, d;
@@ -89,7 +88,7 @@ static void test_vectors(void)
         rows++;
     }
     fclose(fp);
-    CHECK(rows >= 14);
+    CHECK(rows >= 16);
 }
 
 static void test_rejects(void)
@@ -108,11 +107,20 @@ static void test_rejects(void)
     CHECK(!lf_ble_decode_config(b, LF_BLE_CONFIG_LEN, &c)); /* version */
     b[0] = 1; b[1] = 64;
     CHECK(!lf_ble_decode_config(b, LF_BLE_CONFIG_LEN, &c)); /* player */
-    b[1] = 0; b[4] = 2;
+    b[1] = 0; b[3] = 2;
     CHECK(!lf_ble_decode_config(b, LF_BLE_CONFIG_LEN, &c)); /* flag */
-    uint8_t st[LF_BLE_STATE_LEN] = {1, 16, 0, 0, 0, 0, 0};
-    CHECK(!lf_ble_decode_state(st, sizeof st, &s));
-    st[1] = 0; st[6] = 101;
+    b[3] = 0; b[16] = 8;
+    CHECK(!lf_ble_decode_config(b, LF_BLE_CONFIG_LEN, &c)); /* damage code */
+    b[16] = 0; b[17 + 8] = 2;
+    CHECK(!lf_ble_decode_config(b, LF_BLE_CONFIG_LEN, &c)); /* auto reload */
+    b[17 + 8] = 0;
+    uint8_t st[LF_BLE_STATE_LEN] = {1, 0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    CHECK(!lf_ble_decode_state(st, sizeof st, &s)); /* flag bit 6 */
+    st[1] = 0x30;
+    CHECK(!lf_ble_decode_state(st, sizeof st, &s)); /* mode 3 */
+    st[1] = 0; st[10] = 8;
+    CHECK(!lf_ble_decode_state(st, sizeof st, &s)); /* reloading mask */
+    st[10] = 0; st[11] = 101;
     CHECK(!lf_ble_decode_state(st, sizeof st, &s));
     uint8_t ev[LF_BLE_EVENT_LEN] = {1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     CHECK(!lf_ble_decode_event(ev, sizeof ev, &e)); /* kind */

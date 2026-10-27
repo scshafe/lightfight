@@ -9,27 +9,40 @@
 
 #define LF_BLE_VERSION 1
 
-#define LF_BLE_CONFIG_LEN 23
-#define LF_BLE_STATE_LEN 7
+#define LF_BLE_MODES 3
+#define LF_BLE_CONFIG_LEN 40
+#define LF_BLE_STATE_LEN 12
 #define LF_BLE_EVENT_LEN 13
 #define LF_BLE_ACK_LEN 3
 #define LF_BLE_COMMAND_LEN 2
 
+/* flags: bit0 active, bit1 alive, bit2 some mode reloading, bit3 disabled,
+ * bits 4-5 the mode fired last (0 light, 1 heavy, 2 shotgun) */
 enum { LF_STATE_ACTIVE = 1, LF_STATE_ALIVE = 2, LF_STATE_RELOADING = 4, LF_STATE_DISABLED = 8 };
+#define LF_STATE_MODE_SHIFT 4
 enum { LF_EVENT_HIT = 1, LF_EVENT_DOWN = 2 };
 enum { LF_CMD_START = 1, LF_CMD_STOP = 2, LF_CMD_RESPAWN = 3, LF_CMD_PING = 4,
        LF_CMD_DISABLE = 5, LF_CMD_ENABLE = 6 };
 
 typedef struct {
-    uint8_t player, team, damage_code;
+    uint8_t damage_code;            /* 0..7 */
+    bool auto_reload;
+    uint16_t magazine, reload_ms, fire_interval_ms;
+} lf_ble_mode;
+
+typedef struct {
+    uint8_t player, team;
     bool friendly_fire;
-    uint16_t max_health, magazine, reload_ms, respawn_ms, fire_interval_ms;
+    uint16_t max_health, respawn_ms;
     uint8_t damage_table[8];
+    lf_ble_mode mode[LF_BLE_MODES];
 } lf_ble_config;
 
 typedef struct {
     uint8_t flags;
-    uint16_t health, ammo;
+    uint16_t health;
+    uint16_t ammo[LF_BLE_MODES];
+    uint8_t reloading_mask;         /* bit m: mode m is reloading */
     uint8_t battery_pct;
 } lf_ble_state;
 

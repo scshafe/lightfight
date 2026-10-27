@@ -1,4 +1,5 @@
 #include "lf_hub.h"
+#include "lf_conv.h"
 
 static void emit(lf_hub *h, const lf_log_entry *e)
 {
@@ -79,19 +80,9 @@ lf_hub_poll_result lf_hub_poll(lf_hub *h, uint32_t now_us)
 
 void lf_hub_apply_config(lf_hub *h, const lf_ble_config *c)
 {
-    lf_rules_config r = lf_rules_default_config(c->player, c->team);
-    r.damage_code = c->damage_code;
-    r.friendly_fire = c->friendly_fire;
-    r.max_health = c->max_health;
-    r.magazine = c->magazine;
-    r.reload_ms = c->reload_ms;
-    r.respawn_ms = c->respawn_ms;
-    r.fire_interval_ms = c->fire_interval_ms;
-    for (int i = 0; i < 8; i++)
-        r.damage_table[i] = c->damage_table[i];
-    bool was_active = h->rules.active;
-    if (was_active)
+    if (h->rules.active)
         return; /* a match is running: the config applies to the next one */
+    lf_rules_config r = lf_conv_rules_config(c, h->rules.cfg.gap_ms);
     lf_rules_init(&h->rules, &r);
 }
 
@@ -119,14 +110,7 @@ int lf_hub_command(lf_hub *h, uint8_t cmd, uint32_t now_ms)
     }
 }
 
-void lf_hub_state(const lf_hub *h, uint8_t battery_pct, lf_ble_state *out)
-{
-    out->flags = (uint8_t)((h->rules.active ? LF_STATE_ACTIVE : 0) | (h->rules.alive ? LF_STATE_ALIVE : 0) |
-                           (h->rules.reloading ? LF_STATE_RELOADING : 0));
-    out->health = h->rules.health;
-    out->ammo = h->rules.ammo;
-    out->battery_pct = battery_pct > 100 ? 100 : battery_pct;
-}
+void lf_hub_state(const lf_hub *h, uint8_t battery_pct, lf_ble_state *out) { lf_conv_state(&h->rules, battery_pct, out); }
 
 void lf_hub_ack(lf_hub *h, uint16_t event_id) { lf_evq_ack(&h->events, event_id); }
 

@@ -15,9 +15,26 @@ menu "lightfight"
         help
             Needs the external gate pull-down (docs/hardware.md).
 
+    config LF_PIN_IR_WIDE
+        int "GPIO driving the wide shotgun LED's MOSFET gate (blaster)"
+        default 21
+        help
+            Needs its own gate pull-down (docs/hardware.md).
+
     config LF_PIN_TRIGGER
-        int "GPIO of the trigger switch to ground (blaster)"
+        int "GPIO of trigger A (light, silent) to ground (blaster)"
         default 5
+
+    config LF_PIN_TRIGGER_B
+        int "GPIO of trigger B (heavy, sound) to ground (blaster)"
+        default 7
+
+    config LF_PIN_TRIGGER_C
+        int "GPIO of trigger C (shotgun) to ground (blaster)"
+        default 2
+        help
+            GPIO2 is a strapping pin that must be high at reset: fit the 10 k
+            pull-up to 3.3 V (docs/hardware.md).
 
     config LF_PIN_RELOAD
         int "GPIO of the reload switch to ground (blaster)"
@@ -61,9 +78,8 @@ menu "lightfight"
         depends on LF_ROLE_HUB
 
     config LF_PIN_BUZZER
-        int "GPIO of the buzzer (hub)"
+        int "GPIO of the buzzer"
         default 20
-        depends on LF_ROLE_HUB
 
     config LF_PIN_BATTERY
         int "ADC GPIO at the midpoint of the 2 x 220 k battery divider"
@@ -107,5 +123,12 @@ menu "lightfight"
         help
             For the waveform check in docs/bench.md. The frames still go
             through the emitter's safety gate; there is no continuous mode.
+            Magazines are huge and cooldowns zero so a capture never stalls.
+
+    config LF_BENCH_AUTOFIRE_MODE
+        int "Bench: the firing mode the autofire uses (0 light, 1 heavy, 2 shotgun)"
+        default 0
+        range 0 2
+        depends on LF_BENCH_AUTOFIRE
 
 endmenu

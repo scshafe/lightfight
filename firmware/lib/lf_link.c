@@ -14,8 +14,8 @@ static unsigned pending_count(const lf_link *l)
 
 static int same_state(const lf_ble_state *a, const lf_ble_state *b)
 {
-    return a->flags == b->flags && a->health == b->health && a->ammo == b->ammo &&
-           a->battery_pct == b->battery_pct;
+    return a->flags == b->flags && a->health == b->health && !memcmp(a->ammo, b->ammo, sizeof a->ammo) &&
+           a->reloading_mask == b->reloading_mask && a->battery_pct == b->battery_pct;
 }
 
 void lf_link_init(lf_link *l, const lf_link_ops *ops)

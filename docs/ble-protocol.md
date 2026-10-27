@@ -29,14 +29,19 @@ guesses.
 
 | Message | Length | Layout after the version byte |
 |---------|--------|-------------------------------|
-| config | 23 | player u8 (0..63), team u8 (0..7), damage_code u8 (0..7), friendly_fire u8 (0/1), max_health u16, magazine u16, reload_ms u16, respawn_ms u16, fire_interval_ms u16, damage_table 8 x u8 |
-| state | 7 | flags u8 (bit0 active, bit1 alive, bit2 reloading, bit3 disabled), health u16, ammo u16, battery_pct u8 (0..100) |
+| config | 40 | player u8 (0..63), team u8 (0..7), friendly_fire u8 (0/1), max_health u16, respawn_ms u16, damage_table 8 x u8, then 3 firing modes (light, heavy, shotgun) of 8 bytes each: damage_code u8 (0..7), auto_reload u8 (0/1), magazine u16, reload_ms u16, fire_interval_ms u16 |
+| state | 12 | flags u8 (bit0 active, bit1 alive, bit2 some mode reloading, bit3 disabled, bits 4-5 the mode fired last: 0 light, 1 heavy, 2 shotgun), health u16, ammo u16 x 3 (light, heavy, shotgun), reloading_mask u8 (bit m: mode m reloading), battery_pct u8 (0..100) |
 | event | 13 | kind u8 (1 hit, 2 down), event_id u16, shooter u8 (0..63), seq u8 (0..15), damage u8, health_after u16, t_ms u32 (gear uptime) |
 | ack | 3 | event_id u16 |
 | command | 2 | cmd u8 (1 start, 2 stop, 3 respawn, 4 ping, 5 disable, 6 enable) |
 
 `config` mirrors the rules engine's configuration (`lf_rules_config`); the
-phone writes it before a match and the gear applies it on `start`.
+phone writes it before a match and the gear applies it on `start`. The firing
+modes (docs/design.md, "Firing modes") are per-mode settings in it. The gap
+between any two shots is not a setting: the blaster uses the emitter gate's
+minimum (250 ms), and a mode's `fire_interval_ms` below it just means "as fast
+as the gap". The format changed from the 23-byte config and 7-byte state before
+any gear shipped, so the version byte stays 1.
 
 ## Events: ack and replay
 
@@ -75,8 +80,8 @@ queues an `event` (`lf_evq`, 32 slots).
 
 | | config | command | state | events |
 |---|---|---|---|---|
-| **Vest hub** | applied between matches | start, stop, respawn | health, ammo, flags, battery | hits and downs, with ack/replay |
-| **Blaster** | applied between matches | start, stop | ammo, flags, battery | none (never notifies) |
+| **Vest hub** | applied between matches (its firing-mode fields are unused) | start, stop, respawn | health, flags, battery (ammo fields are those of an unused magazine) | hits and downs, with ack/replay |
+| **Blaster** | applied between matches | start, stop, disable, enable | ammo per mode, reloading mask, flags, battery | none (never notifies) |
 
 The device keeps playing with no phone (docs/design.md). While a match is
 active a new `config` is ignored (it applies to the next one); `start` while

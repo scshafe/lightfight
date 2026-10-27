@@ -362,8 +362,9 @@ func (m *Match) GearConfig(playerID string) (protocol.Config, error) {
 	}
 	return protocol.Config{
 		Player: p.Shooter, Team: p.Team, FriendlyFire: m.cfg.FriendlyFire,
-		MaxHealth: 100, Magazine: 30, ReloadMs: 2000, RespawnMs: 10000, FireIntervalMs: 250,
+		MaxHealth: 100, RespawnMs: 10000,
 		DamageTable: [8]uint8{10, 20, 34, 50, 75, 100, 5, 1},
+		Mode:        protocol.DefaultModes(),
 	}, nil
 }
 

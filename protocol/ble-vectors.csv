@@ -1,16 +1,16 @@
 # BLE message vectors: kind,fields...,hex (little-endian, version byte 1). Written by an independent Python struct encoder.
-# config,player,team,damage_code,max_health,magazine,reload_ms,respawn_ms,fire_interval_ms,friendly_fire,dt0..dt7,hex
-# state,flags,health,ammo,battery,hex   (flags: bit0 active, bit1 alive, bit2 reloading, bit3 disabled)
+# config,player,team,friendly_fire,max_health,respawn_ms,dt0..dt7, then per mode (light, heavy, shotgun): damage_code,auto_reload,magazine,reload_ms,fire_interval_ms, hex
+# state,flags,health,ammo_light,ammo_heavy,ammo_shotgun,reloading_mask,battery,hex   (flags: bit0 active, bit1 alive, bit2 some mode reloading, bit3 disabled, bits4-5 mode fired last: 0 light, 1 heavy, 2 shotgun)
 # event,kind,event_id,shooter,seq,damage,health_after,t_ms,hex   (kind: 1 hit, 2 down)
 # ack,event_id,hex
 # command,cmd,hex   (1 start, 2 stop, 3 respawn, 4 ping, 5 disable, 6 enable)
-config,3,1,0,100,30,2000,10000,250,0,10,20,34,50,75,100,5,1,010301000064001E00D0071027FA000A1422324B640501
-config,63,7,7,65535,65535,65535,65535,65535,1,255,255,255,255,255,255,255,255,013F070701FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
-config,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0100000000000000000000000000000000000000000000
-state,3,90,25,87,01035A00190057
-state,0,0,0,0,01000000000000
-state,15,1,2,50,010F0100020032
-state,7,65535,65535,100,0107FFFFFFFF64
+config,3,1,0,100,10000,10,20,34,50,75,100,5,1,0,1,30,2000,250,3,0,5,3000,1500,2,0,2,3500,1000,01030100640010270A1422324B64050100011E00D007FA0003000500B80BDC0502000200AC0DE803
+config,63,7,1,65535,65535,255,255,255,255,255,255,255,255,7,1,65535,65535,65535,7,1,65535,65535,65535,7,1,65535,65535,65535,013F0701FFFFFFFFFFFFFFFFFFFFFFFF0701FFFFFFFFFFFF0701FFFFFFFFFFFF0701FFFFFFFFFFFF
+config,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,01000000000000000000000000000000000000000000000000000000000000000000000000000000
+state,3,90,25,4,1,0,87,01035A001900040001000057
+state,0,0,0,0,0,0,0,010000000000000000000000
+state,47,1,1,2,3,7,50,012F01000100020003000732
+state,21,65535,65535,65535,65535,2,100,0115FFFFFFFFFFFFFFFF0264
 event,1,1,9,5,2,66,123456,01010100090502420040E20100
 event,2,65535,63,15,7,0,4294967295,0102FFFF3F0F070000FFFFFFFF
 ack,0,010000

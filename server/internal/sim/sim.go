@@ -19,6 +19,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/scshafe/lightfight/server/internal/match"
+	"github.com/scshafe/lightfight/server/protocol"
 )
 
 type Options struct {
@@ -113,27 +114,37 @@ func Battle(rng *rand.Rand, ps []joined, friendly bool, shots int) []match.Repor
 	for _, p := range ps {
 		health[p.ID] = 100
 	}
+	modes := protocol.DefaultModes()
+	table := [8]int{10, 20, 34, 50, 75, 100, 5, 1}
 	var out []match.Report
 	for i := 0; i < shots; i++ {
-		sh, tg := ps[rng.Intn(len(ps))], ps[rng.Intn(len(ps))]
-		if sh.ID == tg.ID || (!friendly && sh.Team == tg.Team) {
-			continue
+		sh := ps[rng.Intn(len(ps))]
+		mode := modes[rng.Intn(protocol.Modes)]
+		dmg := table[mode.DamageCode]
+		// the shotgun's wide cone can catch several players with one shot
+		n := 1
+		if mode.DamageCode == modes[protocol.ModeShotgun].DamageCode {
+			n = 1 + rng.Intn(3)
 		}
-		code := rng.Intn(3)
-		dmg := []int{10, 20, 34}[code]
-		health[tg.ID] -= dmg
-		down := health[tg.ID] <= 0
-		if down {
-			health[tg.ID] = 100 // the real gear respawns after a delay
+		for j := 0; j < n; j++ {
+			tg := ps[rng.Intn(len(ps))]
+			if sh.ID == tg.ID || (!friendly && sh.Team == tg.Team) {
+				continue
+			}
+			health[tg.ID] -= dmg
+			down := health[tg.ID] <= 0
+			if down {
+				health[tg.ID] = 100 // the real gear respawns after a delay
+			}
+			eventID[tg.ID]++
+			if eventID[tg.ID] == 0 {
+				eventID[tg.ID] = 1
+			}
+			out = append(out, match.Report{
+				Target: tg.ID, EventID: eventID[tg.ID], Shooter: sh.Shooter, Seq: seq[sh.Shooter] & 15,
+				Damage: uint8(dmg), HealthAfter: uint16(max(health[tg.ID], 0)), Down: down, TMs: uint32(1000 + i*300),
+			})
 		}
-		eventID[tg.ID]++
-		if eventID[tg.ID] == 0 {
-			eventID[tg.ID] = 1
-		}
-		out = append(out, match.Report{
-			Target: tg.ID, EventID: eventID[tg.ID], Shooter: sh.Shooter, Seq: seq[sh.Shooter] & 15,
-			Damage: uint8(dmg), HealthAfter: uint16(max(health[tg.ID], 0)), Down: down, TMs: uint32(1000 + i*300),
-		})
 		seq[sh.Shooter]++
 	}
 	return out

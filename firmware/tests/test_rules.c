@@ -23,12 +23,12 @@ static void test_disabled(void)
     lf_rules r = make(3, 1, 0);
     lf_ir_frame f;
     r.disabled = true;
-    CHECK(lf_rules_trigger(&r, 0, &f) == LF_SHOT_DISABLED);
-    CHECK(r.ammo == r.cfg.magazine); /* no round is spent */
-    r.ammo = 5;
+    CHECK(lf_rules_trigger(&r, 0, 0, &f) == LF_SHOT_DISABLED);
+    CHECK(r.ammo[0] == r.cfg.mode[0].magazine); /* no round is spent */
+    r.ammo[0] = 5;
     CHECK(!lf_rules_reload(&r, 0));
     r.disabled = false;
-    CHECK(lf_rules_trigger(&r, 0, &f) == LF_SHOT_OK);
+    CHECK(lf_rules_trigger(&r, 0, 0, &f) == LF_SHOT_OK);
     r.disabled = true;
     lf_rules_start(&r, 1000); /* a new match starts enabled */
     CHECK(!r.disabled);
@@ -38,36 +38,122 @@ static void test_trigger_rules(void)
 {
     lf_rules r = make(3, 1, 0);
     lf_ir_frame f;
-    CHECK(lf_rules_trigger(&r, 0, &f) == LF_SHOT_OK);
+    CHECK(lf_rules_trigger(&r, 0, 0, &f) == LF_SHOT_OK);
     CHECK(f.shooter == 3 && f.team == 1 && f.seq == 0);
-    CHECK(r.ammo == 29);
-    CHECK(lf_rules_trigger(&r, 100, &f) == LF_SHOT_RATE_LIMITED);
-    CHECK(r.ammo == 29);
-    CHECK(lf_rules_trigger(&r, 250, &f) == LF_SHOT_OK);
+    CHECK(r.ammo[0] == 29);
+    CHECK(lf_rules_trigger(&r, 0, 100, &f) == LF_SHOT_RATE_LIMITED);
+    CHECK(r.ammo[0] == 29);
+    CHECK(lf_rules_trigger(&r, 0, 250, &f) == LF_SHOT_OK);
     CHECK(f.seq == 1);
     /* seq wraps at 16 */
     for (int i = 2; i < 16; i++)
-        CHECK(lf_rules_trigger(&r, 250u * i + 250, &f) == LF_SHOT_OK);
+        CHECK(lf_rules_trigger(&r, 0, 250u * i + 250, &f) == LF_SHOT_OK);
     CHECK(f.seq == 15);
-    CHECK(lf_rules_trigger(&r, 250u * 17, &f) == LF_SHOT_OK);
+    CHECK(lf_rules_trigger(&r, 0, 250u * 17, &f) == LF_SHOT_OK);
     CHECK(f.seq == 0);
 }
 
 static void test_ammo_and_reload(void)
 {
     lf_rules r = make(1, 0, 0);
+    r.cfg.mode[0].auto_reload = false;
     lf_ir_frame f;
     uint32_t t = 0;
     CHECK(!lf_rules_reload(&r, t)); /* full */
     for (int i = 0; i < 30; i++, t += 250)
-        CHECK(lf_rules_trigger(&r, t, &f) == LF_SHOT_OK);
-    CHECK(lf_rules_trigger(&r, t, &f) == LF_SHOT_NO_AMMO);
+        CHECK(lf_rules_trigger(&r, 0, t, &f) == LF_SHOT_OK);
+    CHECK(lf_rules_trigger(&r, 0, t, &f) == LF_SHOT_NO_AMMO);
     CHECK(lf_rules_reload(&r, t));
-    CHECK(lf_rules_trigger(&r, t + 500, &f) == LF_SHOT_RELOADING);
+    CHECK(lf_rules_trigger(&r, 0, t + 500, &f) == LF_SHOT_RELOADING);
     CHECK(!lf_rules_tick(&r, t + 1999).reload_finished);
     CHECK(lf_rules_tick(&r, t + 2000).reload_finished);
-    CHECK(r.ammo == 30);
-    CHECK(lf_rules_trigger(&r, t + 2000, &f) == LF_SHOT_OK);
+    CHECK(r.ammo[0] == 30);
+    CHECK(lf_rules_trigger(&r, 0, t + 2000, &f) == LF_SHOT_OK);
+}
+
+static lf_rules make_noauto(void)
+{
+    lf_rules r = make(1, 0, 0);
+    for (int m = 0; m < LF_MODES; m++)
+        r.cfg.mode[m].auto_reload = false;
+    return r;
+}
+
+static void test_modes(void)
+{
+    lf_rules r = make(5, 2, 0);
+    lf_ir_frame f;
+    /* each mode stamps its own damage code */
+    CHECK(lf_rules_trigger(&r, LF_MODE_LIGHT, 0, &f) == LF_SHOT_OK && f.damage == 0);
+    CHECK(lf_rules_trigger(&r, LF_MODE_HEAVY, 250, &f) == LF_SHOT_OK && f.damage == 3);
+    CHECK(lf_rules_trigger(&r, LF_MODE_SHOTGUN, 500, &f) == LF_SHOT_OK && f.damage == 2);
+    CHECK(f.shooter == 5 && f.team == 2 && f.seq == 2); /* one sequence across the modes */
+    CHECK(r.ammo[0] == 29 && r.ammo[1] == 4 && r.ammo[2] == 1);
+    CHECK(lf_rules_trigger(&r, 3, 1000, &f) == LF_SHOT_BAD_MODE);
+    /* the global gap holds across modes, a mode's cooldown only for itself */
+    CHECK(lf_rules_trigger(&r, LF_MODE_LIGHT, 600, &f) == LF_SHOT_RATE_LIMITED); /* 100 ms after the shotgun */
+    CHECK(lf_rules_trigger(&r, LF_MODE_LIGHT, 750, &f) == LF_SHOT_OK);
+    CHECK(lf_rules_trigger(&r, LF_MODE_HEAVY, 1000, &f) == LF_SHOT_RATE_LIMITED); /* heavy cooldown 1500 ms */
+    CHECK(lf_rules_trigger(&r, LF_MODE_HEAVY, 1749, &f) == LF_SHOT_RATE_LIMITED);
+    CHECK(lf_rules_trigger(&r, LF_MODE_HEAVY, 1750, &f) == LF_SHOT_OK);
+    CHECK(r.ammo[1] == 3);
+    CHECK(lf_rules_trigger(&r, LF_MODE_SHOTGUN, 2500, &f) == LF_SHOT_OK); /* last round */
+    CHECK(lf_rules_trigger(&r, LF_MODE_SHOTGUN, 4000, &f) == LF_SHOT_NO_AMMO);
+}
+
+static void test_reload_targets(void)
+{
+    lf_rules r = make_noauto();
+    lf_ir_frame f;
+    CHECK(!lf_rules_reload(&r, 0)); /* nothing fired: the light mode is full */
+    CHECK(lf_rules_trigger(&r, LF_MODE_LIGHT, 0, &f) == LF_SHOT_OK);
+    CHECK(lf_rules_trigger(&r, LF_MODE_HEAVY, 250, &f) == LF_SHOT_OK);
+    CHECK(lf_rules_trigger(&r, LF_MODE_SHOTGUN, 500, &f) == LF_SHOT_OK); /* fired last */
+    /* a press reloads the mode fired last only */
+    CHECK(lf_rules_reload(&r, 600));
+    CHECK(lf_rules_reloading_mask(&r) == 4);
+    CHECK(!lf_rules_reload(&r, 650)); /* already reloading */
+    /* the other modes keep firing meanwhile */
+    CHECK(lf_rules_trigger(&r, LF_MODE_LIGHT, 1000, &f) == LF_SHOT_OK);
+    CHECK(lf_rules_trigger(&r, LF_MODE_SHOTGUN, 1500, &f) == LF_SHOT_RELOADING);
+    /* held: every mode that is not full */
+    CHECK(lf_rules_reload_all(&r, 1100));
+    CHECK(lf_rules_reloading_mask(&r) == 7);
+    lf_tick_events e = lf_rules_tick(&r, 1100 + 2000); /* light: 2000 ms from the held press */
+    CHECK(e.reload_finished && e.reloaded_mask == 1 && r.ammo[0] == 30);
+    CHECK(lf_rules_tick(&r, 600 + 3499).reloaded_mask == 0);
+    e = lf_rules_tick(&r, 600 + 3500); /* shotgun (short press) and heavy (held) end together */
+    CHECK(e.reloaded_mask == 6 && r.ammo[2] == 2 && r.ammo[1] == 5 && lf_rules_reloading_mask(&r) == 0);
+    CHECK(!lf_rules_reload_all(&r, 9000)); /* all full */
+}
+
+static void test_auto_reload(void)
+{
+    lf_rules r = make(1, 0, 0);
+    lf_ir_frame f;
+    r.cfg.mode[LF_MODE_HEAVY].auto_reload = true;
+    r.cfg.mode[LF_MODE_HEAVY].magazine = 1;
+    r.ammo[LF_MODE_HEAVY] = 1;
+    CHECK(lf_rules_trigger(&r, LF_MODE_HEAVY, 0, &f) == LF_SHOT_OK);
+    CHECK(r.reloading[LF_MODE_HEAVY]); /* the last round started it */
+    CHECK(lf_rules_tick(&r, 3000).reloaded_mask == 2 && r.ammo[LF_MODE_HEAVY] == 1);
+    /* the shotgun has it off: it waits for the button, and a pull on empty does not reload */
+    r.ammo[LF_MODE_SHOTGUN] = 0;
+    CHECK(lf_rules_trigger(&r, LF_MODE_SHOTGUN, 4000, &f) == LF_SHOT_NO_AMMO);
+    CHECK(!r.reloading[LF_MODE_SHOTGUN]);
+    /* a pull on an empty magazine with auto-reload on starts the reload */
+    r.ammo[LF_MODE_LIGHT] = 0;
+    CHECK(lf_rules_trigger(&r, LF_MODE_LIGHT, 4000, &f) == LF_SHOT_NO_AMMO);
+    CHECK(r.reloading[LF_MODE_LIGHT]);
+    CHECK(lf_rules_tick(&r, 6000).reloaded_mask == 1);
+    /* going down cancels reloads; a respawn refills every magazine */
+    lf_rules_trigger(&r, LF_MODE_LIGHT, 7000, &f);
+    r.ammo[LF_MODE_SHOTGUN] = 0;
+    lf_ir_frame h = shot(9, 1, 5, 0); /* damage code 5 = 100 */
+    CHECK(lf_rules_on_frame(&r, 7100, &h).kind == LF_HIT_DOWN);
+    CHECK(lf_rules_reloading_mask(&r) == 0);
+    CHECK(lf_rules_tick(&r, 7100 + 10000).respawned);
+    CHECK(r.ammo[0] == 30 && r.ammo[1] == 1 && r.ammo[2] == 2);
 }
 
 static void test_inactive(void)
@@ -75,7 +161,7 @@ static void test_inactive(void)
     lf_rules r = make(1, 0, 0);
     lf_ir_frame f;
     lf_rules_stop(&r);
-    CHECK(lf_rules_trigger(&r, 0, &f) == LF_SHOT_INACTIVE);
+    CHECK(lf_rules_trigger(&r, 0, 0, &f) == LF_SHOT_INACTIVE);
     lf_ir_frame in = shot(9, 1, 0, 0);
     CHECK(lf_rules_on_frame(&r, 0, &in).reason == LF_IGNORE_INACTIVE);
 }
@@ -94,12 +180,12 @@ static void test_hit_and_down_and_respawn(void)
     CHECK(h.kind == LF_HIT_DOWN && h.damage == 32 && h.health_after == 0);
     CHECK(!r.alive);
     lf_ir_frame f;
-    CHECK(lf_rules_trigger(&r, 800, &f) == LF_SHOT_DEAD);
+    CHECK(lf_rules_trigger(&r, 0, 800, &f) == LF_SHOT_DEAD);
     a.seq = 3;
     CHECK(lf_rules_on_frame(&r, 900, &a).reason == LF_IGNORE_DEAD);
     CHECK(!lf_rules_tick(&r, 10699).respawned);
     CHECK(lf_rules_tick(&r, 10700).respawned);
-    CHECK(r.alive && r.health == 100 && r.ammo == 30);
+    CHECK(r.alive && r.health == 100 && r.ammo[0] == 30);
 }
 
 static void test_dedupe(void)
@@ -157,9 +243,9 @@ static void test_clock_wrap(void)
     uint32_t t = 0xFFFFFF00u;
     lf_rules r = make(1, 0, t);
     lf_ir_frame f;
-    CHECK(lf_rules_trigger(&r, t, &f) == LF_SHOT_OK);
-    CHECK(lf_rules_trigger(&r, t + 100, &f) == LF_SHOT_RATE_LIMITED);
-    CHECK(lf_rules_trigger(&r, t + 250, &f) == LF_SHOT_OK); /* wrapped past 0 */
+    CHECK(lf_rules_trigger(&r, 0, t, &f) == LF_SHOT_OK);
+    CHECK(lf_rules_trigger(&r, 0, t + 100, &f) == LF_SHOT_RATE_LIMITED);
+    CHECK(lf_rules_trigger(&r, 0, t + 250, &f) == LF_SHOT_OK); /* wrapped past 0 */
     lf_ir_frame a = shot(9, 1, 0, 0);
     CHECK(lf_rules_on_frame(&r, t, &a).kind == LF_HIT_DAMAGED);
     CHECK(lf_rules_on_frame(&r, t + 500, &a).reason == LF_IGNORE_DUPLICATE);
@@ -172,7 +258,7 @@ static void test_end_to_end_with_codec(void)
     lf_rules shooter = make(4, 1, 0), target = make(5, 2, 0);
     lf_ir_frame out, in;
     uint16_t t[LF_IR_TIMINGS];
-    CHECK(lf_rules_trigger(&shooter, 0, &out) == LF_SHOT_OK);
+    CHECK(lf_rules_trigger(&shooter, 0, 0, &out) == LF_SHOT_OK);
     CHECK(lf_ir_build_timings(&out, t) == LF_IR_OK);
     /* three sensors see the same shot */
     int hits = 0;
@@ -189,6 +275,9 @@ int main(void)
     test_trigger_rules();
     test_disabled();
     test_ammo_and_reload();
+    test_modes();
+    test_reload_targets();
+    test_auto_reload();
     test_inactive();
     test_hit_and_down_and_respawn();
     test_dedupe();
