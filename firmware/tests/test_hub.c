@@ -224,12 +224,128 @@ static void test_log_format(void)
     CHECK(lf_log_format(&e, tiny, sizeof tiny) == 0);
 }
 
+/* the OR of the outputs over [from_ms, to_ms], sampled every millisecond */
+static uint8_t outputs_between(lf_hub *h, uint32_t from_ms, uint32_t to_ms)
+{
+    uint8_t seen = 0;
+    for (uint32_t t = from_ms; t <= to_ms; t++)
+        seen |= lf_hub_outputs(h, t);
+    return seen;
+}
+
+/* shoot the hub from one or more sensors, each seeing the frame skew_us late,
+ * and poll as the firmware does (edges arrive in time order, never ahead of the
+ * poll); return the outputs seen from the shot to 1.5 s after it */
+static uint8_t shoot_and_feel(lf_hub *h, lf_ir_frame f, const int *sensors, const uint32_t *skew_us, int n,
+                              uint32_t t0, unsigned *on_ms)
+{
+    uint16_t timings[LF_IR_TIMINGS];
+    lf_ir_build_timings(&f, timings);
+    sim_edge e[4][64];
+    unsigned ne[4] = {0}, at[4] = {0};
+    uint32_t last = 0;
+    for (int i = 0; i < n; i++) {
+        uint32_t end = sim_frame(e[i], &ne[i], timings, t0 + skew_us[i], 0);
+        if (end > last)
+            last = end;
+    }
+    uint8_t seen = 0;
+    for (uint32_t t = t0; t <= last + 1500000; t += 1000) {
+        for (int i = 0; i < n; i++)
+            while (at[i] < ne[i] && e[i][at[i]].t_us <= t) {
+                lf_hub_edge(h, sensors[i], e[i][at[i]].level, e[i][at[i]].t_us);
+                at[i]++;
+            }
+        lf_hub_poll(h, t);
+        uint8_t o = lf_hub_outputs(h, t / 1000);
+        seen |= o;
+        if (on_ms)
+            *on_ms += o != 0;
+    }
+    return seen;
+}
+
+static void test_haptic_zones(void)
+{
+    capture cap = {.n = 0};
+    lf_hub h = make(&cap, 1, 0);
+    uint32_t t = 100000000;
+    /* a light body shot (10 hp) on the chest: the vest only */
+    const int chest[] = {0};
+    const uint32_t z[] = {0, 0};
+    CHECK(shoot_and_feel(&h, (lf_ir_frame){9, 1, 0, 0}, chest, z, 1, t, NULL) == LF_OUT_VEST);
+    /* a heavy shot (50 hp) on the right shoulder: vest */
+    t += 3000000;
+    const int shoulder[] = {2};
+    CHECK(shoot_and_feel(&h, (lf_ir_frame){9, 1, 3, 1}, shoulder, z, 1, t, NULL) == LF_OUT_VEST);
+    CHECK(h.rules.health == 40);
+    h.rules.health = 100;
+    /* a shot only the headband front reads: the headband only */
+    t += 3000000;
+    const int head[] = {3};
+    CHECK(shoot_and_feel(&h, (lf_ir_frame){9, 1, 0, 2}, head, z, 1, t, NULL) == LF_OUT_HEAD);
+    /* the chest decodes it first, the headband 4 ms later: still a headshot */
+    t += 3000000;
+    const int both[] = {0, 4};
+    const uint32_t skew[] = {0, 4000};
+    CHECK(shoot_and_feel(&h, (lf_ir_frame){9, 1, 0, 3}, both, skew, 2, t, NULL) == LF_OUT_HEAD);
+    /* the headband first, the chest after: also a headshot (not both motors) */
+    t += 3000000;
+    const int both2[] = {4, 1};
+    CHECK(shoot_and_feel(&h, (lf_ir_frame){9, 1, 0, 4}, both2, skew, 2, t, NULL) == LF_OUT_HEAD);
+    CHECK(h.rules.health == 70 && h.rules.alive); /* 90, then 80 and 70 for the two shots seen twice */
+}
+
+static void test_haptic_light_and_heavy_differ_in_length(void)
+{
+    capture cap = {.n = 0};
+    lf_hub h = make(&cap, 1, 0);
+    const int chest[] = {0};
+    const uint32_t z[] = {0};
+    unsigned on_light = 0, on_heavy = 0;
+    shoot_and_feel(&h, (lf_ir_frame){9, 1, 0, 0}, chest, z, 1, 100000000, &on_light);
+    shoot_and_feel(&h, (lf_ir_frame){9, 1, 3, 1}, chest, z, 1, 103000000, &on_heavy);
+    CHECK(on_light >= 59 && on_light <= 61);
+    CHECK(on_heavy >= 249 && on_heavy <= 251);
+}
+
+static void test_haptic_down_and_respawn(void)
+{
+    capture cap = {.n = 0};
+    lf_hub h = make(&cap, 1, 0);
+    const int chest[] = {0};
+    const uint32_t z[] = {0};
+    uint32_t t = 100000000;
+    uint8_t seen = 0;
+    for (int i = 0; i < 3; i++) { /* 3 x 34 hp: the third kills */
+        seen = shoot_and_feel(&h, (lf_ir_frame){9, 1, 2, (uint8_t)i}, chest, z, 1, t, NULL);
+        t += 3000000;
+    }
+    CHECK(!h.rules.alive);
+    CHECK(seen == (LF_OUT_VEST | LF_OUT_HEAD | LF_OUT_BUZZER)); /* both motors and the buzzer */
+    /* the respawn (10 s after the kill) buzzes both, with no buzzer */
+    uint32_t ms = t / 1000;
+    uint8_t at_respawn = 0;
+    for (uint32_t u = ms; u < ms + 12000; u++) {
+        lf_hub_poll(&h, u * 1000);
+        at_respawn |= lf_hub_outputs(&h, u);
+    }
+    CHECK(h.rules.alive);
+    CHECK(at_respawn == (LF_OUT_VEST | LF_OUT_HEAD));
+    /* stop silences everything */
+    lf_hub_command(&h, LF_CMD_STOP, ms + 13000);
+    CHECK(outputs_between(&h, ms + 13000, ms + 13100) == 0);
+}
+
 int main(void)
 {
     test_five_sensors_one_hit();
     test_lossy_sensors_exact_count();
     test_down_event_and_ble_roundtrip();
     test_commands_and_config();
+    test_haptic_zones();
+    test_haptic_light_and_heavy_differ_in_length();
+    test_haptic_down_and_respawn();
     test_frames_while_stopped_are_dropped();
     test_bad_burst_is_logged();
     test_log_format();

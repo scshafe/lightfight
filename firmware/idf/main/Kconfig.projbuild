@@ -59,8 +59,11 @@ menu "lightfight"
 
     config LF_PIN_SENSOR2
         int "GPIO of IR receiver 2, right shoulder (hub)"
-        default 5
+        default 8
         depends on LF_ROLE_HUB
+        help
+            GPIO8 is a strapping pin that must be high at reset (for the USB
+            download mode); the receiver output idles high, which suits it.
 
     config LF_PIN_SENSOR3
         int "GPIO of IR receiver 3, headband front (hub)"
@@ -76,6 +79,14 @@ menu "lightfight"
         int "GPIO of the vibration motor's MOSFET gate (hub)"
         default 21
         depends on LF_ROLE_HUB
+
+    config LF_PIN_HAPTIC_HEAD
+        int "GPIO of the headband vibration motor's MOSFET gate (hub)"
+        default 5
+        depends on LF_ROLE_HUB
+        help
+            A headshot buzzes this motor, a body shot the vest's
+            (LF_PIN_HAPTIC). Needs a gate pull-down and a flyback diode.
 
     config LF_PIN_BUZZER
         int "GPIO of the buzzer"

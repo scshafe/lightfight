@@ -122,6 +122,30 @@ second board running the blaster. Flash the hub (`idf-flash.sh hub ...`).
 5. Cover receiver 0 with a finger and fire at 1 m again: one of the other
    receivers still counts it (this is why there are five).
 
+## B6b - haptic cues
+
+With the hub running (B6) and the blaster firing at it:
+
+1. **Body shot, light** (trigger A at the chest): the vest motor ticks once
+   (about 60 ms); the headband motor stays off.
+2. **Body shot, heavy** (trigger B, then C): the vest motor buzzes about
+   250 ms, clearly longer and stronger than the tick; headband off.
+3. **Headshot:** aim at the headband sensors only (a mask of tape over the
+   chest and shoulder receivers works): the headband motor buzzes, the vest
+   stays off, light and heavy as above. With the tape off and the blaster
+   aimed at the face from 2 m, a shot that reaches both must buzz only the
+   headband. Record how often a shot aimed at the chest buzzes the headband
+   by mistake (it should be never or rarely).
+4. **Kill:** shoot until health is 0 (B6): both motors and the buzzer, three
+   pulses, the last one long.
+5. **Respawn** (10 s later, or write `0103` to the command characteristic):
+   both motors double-tap, no buzzer.
+6. Wear it: record whether each cue is clearly felt through clothing, and
+   whether the headband motor is comfortable. Report the three motor currents
+   (peak and what the 3.3 V rail does while both run, as in the kill).
+7. Each motor's gate is pulled low at reset: with the board held in reset
+   (RST button) neither motor runs.
+
 ## B7 - range and reliability
 
 For each distance in 1, 3, 5, 10 and 15 m (as far as the room allows), with

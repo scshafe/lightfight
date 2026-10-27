@@ -160,7 +160,8 @@ lf_hit lf_rules_on_frame(lf_rules *r, uint32_t now_ms, const lf_ir_frame *f)
     uint8_t dmg_full = r->cfg.damage_table[f->damage & 7];
     uint8_t dmg = dmg_full > r->health ? (uint8_t)r->health : dmg_full;
     r->health = (uint16_t)(r->health - dmg);
-    lf_hit h = {.shooter = f->shooter, .seq = f->seq, .damage = dmg, .health_after = r->health};
+    lf_hit h = {.shooter = f->shooter, .seq = f->seq, .damage = dmg, .full_damage = dmg_full,
+                .health_after = r->health};
     if (r->health == 0) {
         r->alive = false;
         for (int m = 0; m < LF_MODES; m++)
