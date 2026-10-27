@@ -197,7 +197,7 @@ the shotgun keeps its wide LED with no lens.
   no light leaves except through the lens.
 - **Drive:** about 200 mA peak, the TSAL6200's repetitive-pulse rating at 50%
   duty (pulses of 13 us, well under its 100 us limit). Do not exceed it: the
-  hardware sets the current (15 ohm, docs/hardware.md), the firmware sets the
+  hardware sets the current (a constant-current sink with a 3.6 ohm sense resistor, 181 mA nominal and 200 mA at most at any cell voltage, docs/hardware.md), the firmware sets the
   carrier duty to 50% for this LED (33% stays on the wide LED) and the safety
   gate still caps the average. The mean current in a mark is then 100 mA, the
   part's continuous rating.
@@ -217,20 +217,23 @@ step B11 measures them.
 | Case | Range limit | Hit cone | Margin |
 |------|-------------|----------|--------|
 | Receiver facing the sun, threshold about 3 mW/m^2 | about 104 m | | |
-| Shade | about 146 m | | |
+| Daylight shade, about 8 klx ambient, threshold about 1.5 mW/m^2 (Fig. 6) | about 146 m | | |
+| Dark, threshold 0.04-0.12 mW/m^2 | several hundred metres (500 m and more); not limited by the receiver | | |
 | 50 m, sun | | +-2.0 degrees (3.5 m wide) | 6.4 dB |
 | 75 m, sun | | about 3.5 m wide | 2.8 dB |
 
 What I checked of the numbers: 32 W/sr over 3 mW/m^2 gives 103 m, and over
 the 50 m and 75 m irradiances (12.8 and 5.7 mW/m^2) it gives margins of 6.3
-and 2.8 dB, so the sun rows reproduce. The shade row does not follow from the
-datasheet's 0.1 mW/m^2 (that would reach several hundred metres); 146 m
-implies a threshold of about 1.5 mW/m^2 in shade, so I took the figure as
-given. Two things will move the results: the intensity is roughly
-proportional to the LED current, so at a cell voltage of 3.3 V (about 120 mA
-through the 15 ohm resistor against about 177 mA at 4.2 V) the range drops by
-more than a third; and a constant-current driver would remove that, which I
-have not added. B11 measures at two cell voltages for that reason.
+and 2.8 dB; over the daylight-shade threshold of 1.5 mW/m^2 it gives 146 m;
+over 0.12 and 0.04 mW/m^2 in the dark it gives about 520 and 890 m. "Shade" in
+this table means daylight shade, not dark.
+
+The current is held by a constant-current sink (docs/hardware.md), so the
+intensity no longer falls as the cell drains: about 181 mA at 25 C from 4.2 V
+down to about 2.5 V, against the 200 mA the model uses. That is about 0.85 dB
+(10%) below the modelled intensity, which I take as the price of never exceeding
+the rating in the cold; the real current and intensity are measured in B2 and
+B11.
 
 Out of scope until decided: sun hoods on the receivers and a back-of-torso
 sensor.
@@ -266,7 +269,7 @@ sensor.
 | Item | Qty | Est. cost (USD) |
 |------|-----|-----------------|
 | ESP32-C3 dev board (blaster, vest hub) | 2 | 10 |
-| 940 nm IR LED (eye-safe class, rated ≥100 mA continuous and 200 mA repetitive) + driver (logic MOSFET, series resistor) | 1–2 | 3 |
+| 940 nm IR LED (eye-safe class, rated ≥100 mA continuous and 200 mA repetitive) + constant-current driver (2 transistors, 3 resistors) for the main LED, MOSFET + resistor for the wide one | 1–2 | 3.3 |
 | 38 kHz IR receiver modules (TSOP38238 class) for vest and headband | 5 | 6 |
 | Vibration motor, piezo buzzer, status LEDs, trigger and reload switches | — | 6 |
 | 1S Li-ion/LiPo cells with built-in protection (blaster, hub) | 2 | 12 |
@@ -277,7 +280,7 @@ sensor.
 | Second coin vibration motor (headband) + MOSFET + diode | 1 | 1.5 |
 | Fuse or PTC per pack, wiring, connectors | — | 3 |
 | Enclosures (3D printed), vest and headband webbing | — | 8 |
-| **Total** | | **about 63** (range 55–71) |
+| **Total** | | **about 63** (range 55–71; the constant-current driver adds about $0.3 and the total does not move) |
 
 Prototype: 2 players about $130–165 including spares; tools (soldering,
 multimeter, a 940 nm-sensitive phone camera or IR card for checking) are the
@@ -325,6 +328,11 @@ owner's. A cheaper kit variant exists (decision 8).
     0.3 mm), the radiance would be 50 times higher and the average only about
     5 times under. The datasheet gives no chip radiance, so this is the
     figure to check with the real part before the lens is used on people.
+  - The constant-current driver does not change the worst case: the peak is
+    at most 200 mA at any cell voltage and temperature (181 mA nominal), the
+    same ceiling the 0.12 W beam above is computed for, so the figures stand. A
+    fault that shorts the sink transistor is not covered by the firmware gate
+    (docs/hardware.md, "A fault the firmware cannot cover").
   - These rest on typical datasheet and modelled values, not measurements. The
     firmware gate (5% cap) is what holds the averages; do not raise it, the
     current or the duty without redoing this.
@@ -348,10 +356,12 @@ owner's. A cheaper kit variant exists (decision 8).
   LED transmits at a time and the on-time budget counts both together. The
   retina thermal limit depends on the chip's radiance, which only the
   datasheet gives; check it when the part is chosen, as for the narrow LED.
-- **Current:** the LED current is set in hardware (series resistor sized to the
-  datasheet rating; peak current within the part's pulsed rating and the
+- **Current:** the LED current is set in hardware (a series resistor sized to the
+  datasheet rating, or the constant-current sink on the lensed LED; peak current within the part's pulsed rating and the
   average within its continuous rating: the lensed LED peaks at 200 mA, its
-  repetitive-pulse rating at 50% duty, and averages 100 mA in a mark). A MOSFET gate pull-down keeps the LED
+  repetitive-pulse rating at 50% duty, and averages 100 mA in a mark; a
+  constant-current sink holds it at 200 mA or less at every cell voltage and
+  temperature). A gate or base pull-down keeps the LED
   off if the MCU hangs or boots. Firmware enforces a fire-rate cap and a
   maximum frame duty cycle (frame 40 ms at most every 250 ms, carrier 50%,
   so the average duty stays under about 8%), and a watchdog resets on a stuck

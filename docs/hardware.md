@@ -10,39 +10,64 @@ materials") fixes the shape, not the part.
 - **Board:** Seeed XIAO ESP32-C3. It has a LiPo charger on board (battery on
   the BAT pads, charge over USB-C), so no separate charger module.
 - **Emitter:** one 940 nm 5 mm IR LED (candidate: Vishay TSAL6200) behind a
-  lens (below), switched by a logic-level N-MOSFET (candidate: AO3400A or
-  IRLML6344, Vgs(th) well below 3.3 V), the LED on the battery rail through a
-  series resistor. It is driven at about 200 mA peak, the TSAL6200's
-  repetitive-pulse rating at 50% duty (pulses under 100 us), which the 38 kHz
-  carrier at 50% duty gives (13 us pulses); the firmware sets that duty for this
-  LED (`NARROW_CARRIER_DUTY_PERCENT` in `blaster.c`). Never exceed it.
+  lens (below), driven by a **constant-current sink** so the peak current stays
+  about the same from a full cell to a nearly flat one (owner decision
+  2026-10-27). The LED is run at its repetitive-pulse rating, 200 mA at 50%
+  duty with pulses under 100 us; the 38 kHz carrier at 50% duty gives 13 us
+  pulses and the firmware sets that duty for this LED
+  (`NARROW_CARRIER_DUTY_PERCENT` in `blaster.c`). Never exceed 200 mA.
+
+  The sink is the classic two-transistor limiter, on the LED's low side:
 
   ```
-  BAT+ --+--[R_led 15 R]--|>|-- LED anode..cathode --+-- MOSFET drain
-         +-- 100 uF + 100 nF to GND, close to the resistor   MOSFET source -- GND
-  GPIO(LF_PIN_IR_LED) --[100 R]-- MOSFET gate --+-- [100 k] -- GND   (gate pull-down)
+  BAT+ --+-- LED anode..cathode -- Q1 collector (BC817-40, NPN, SOT-23)
+         +-- 100 uF + 100 nF to GND, close to the LED
+  GPIO(LF_PIN_IR_LED) --[680 R]--+-- Q1 base
+                                 +-- Q2 collector (BC847, NPN, SOT-23)
+                                 +-- [100 k] -- GND   (base pull-down)
+  Q1 emitter --+-- [Rs 3.6 R, 1%] -- GND
+               +-- Q2 base                  Q2 emitter -- GND
   ```
 
-  The 100 k pull-down keeps the LED off while the MCU is in reset or booting;
-  it is part of the safety design and is checked in the bench procedure. The
-  100 uF capacitor supplies the 200 mA pulses so the cell and the wiring do not
-  sag at 38 kHz.
-- **Resistor:** size it for the *highest* battery voltage and the *lowest* V_f
-  so the peak never exceeds the repetitive-pulse rating, then check the lowest
-  battery voltage still gives enough range:
+  When the voltage across Rs reaches Q2's base-emitter voltage (about 0.65 V)
+  Q2 turns on and takes away Q1's base drive, so the LED current is
+  `I = Vbe(Q2) / Rs` whatever the cell voltage is. The base is driven from the
+  GPIO's regulated 3.3 V, not the cell, so nothing in the loop depends on the
+  cell. The 100 k pull-down keeps Q1 off while the MCU is in reset or booting;
+  it is part of the safety design and is checked in the bench procedure.
+  Neither transistor saturates in use, so the edges are fast (about a
+  microsecond or less; bench B2 looks at them).
+- **Current and headroom:** Vbe(Q2) is about 0.65 V at 25 C, 0.70 V at 0 C
+  and 0.60 V at 45 C (about -2 mV/C), so with Rs = 3.6 ohm, 1%:
 
-  `R_led = (V_batt_max - V_f_min - V_ds_on) / I_peak_max`
+  | Condition | Vbe | Peak current |
+  |-----------|-----|--------------|
+  | 25 C | 0.65 V | about 181 mA |
+  | cold (0 C), worst high | 0.72 V (with tolerance) | at most 200 mA |
+  | hot (45 C) | 0.60 V | about 167 mA |
 
-  With I_peak_max 200 mA, V_f_min about 1.3 V, V_ds_on about 0.1 V and
-  V_batt_max = 4.2 V: R is at least 14 ohm; use **15 ohm, 1%, 1/4 W** (it
-  dissipates about 0.6 W for 13 us pulses, 3.4% of the time, so about 20 mW
-  mean). With V_f about 1.45 V this gives about 177 mA at 4.2 V and about
-  120 mA at 3.3 V, the worst case 193 mA at 4.25 V with the lowest V_f. 13 ohm
-  gives exactly 200 mA typical and exceeds the rating at the corners: do not
-  use it. Intensity is roughly proportional to current, so the range falls as
-  the cell drains (docs/design.md, "Optics"). These figures come from my
-  reading of typical datasheet values; **recompute them from the datasheet of
-  the part actually bought and confirm by measurement** (bench steps B2, B11).
+  So the peak never exceeds the 200 mA rating at any cell voltage or
+  temperature, and it varies by about +-10% instead of the old 120 to 177 mA
+  with the cell. Choosing Rs for the cold worst case costs about 10% of
+  intensity against a 200 mA nominal (0.85 dB); if the bench shows the current
+  has a margin under 200 mA in the cold, Rs can go down (3.3 ohm gives 197 mA
+  nominal) but check it at 0 C first. Q1 needs headroom of
+  Vf_max + 0.65 V + Vce(sat) = about 1.6 + 0.65 + 0.2 = 2.5 V, so the current
+  stays constant down to about 2.5 V (3.3 V is the lowest the bench checks). Q1 dissipates up to
+  (4.2 - 1.3 - 0.65) x 0.2 = 0.45 W for 13 us pulses, 3.4% of the time at
+  most: about 15 mW mean, well inside a SOT-23. Rs dissipates 0.13 W in a
+  pulse, a few mW mean. Q1's base drive is (3.3 - 1.4) / 680 = 2.8 mA, enough
+  for hFE 100 at 200 mA; Q2 sinks the excess. These figures come from typical
+  datasheet values: **recompute them from the datasheets of the parts bought and
+  confirm by measurement** (bench steps B2, B11).
+- **A fault the firmware cannot cover:** if Q1 fails short, the LED sees the cell
+  through Rs alone, about 0.6 A, continuously. The 1 A resettable fuse does not
+  trip on it and the gate pull-down does not apply. The same single fault was
+  there with a MOSFET and a series resistor (about 170 mA continuous). For the
+  prototype I accept it: the driver is two parts on a rigid board; if the owner
+  wants it covered, a 250 mA resettable fuse in the LED branch (a 0.5 A hold
+  part is too large) would do it, at the cost of its resistance and a hold
+  current margin below 200 mA pulses; I have not added it.
 - **Lens and tube (owner decision 2026-10-27):** a 40 mm diameter lens of about
   50 mm focal length, PMMA asphere or Fresnel, with the LED at the focus on
   the lens axis, 50 mm behind the lens (a Fresnel's focal length is set by its
@@ -154,8 +179,10 @@ The pair button is the XIAO's own BOOT button (GPIO9); nothing to wire.
 | Resettable fuse / PTC, about 1 A hold | 5 |
 | 940 nm IR LED, 5 mm (TSAL6200 or equivalent; needs 200 mA repetitive-pulse rating at 50% duty) | 6 |
 | 940 nm IR LED, 5 mm, wide-angle (half-angle 45 degrees or more) for the shotgun | 4 |
-| Logic-level N-MOSFET, SOT-23 (AO3400A or equivalent) | 12 |
-| Resistors: 15 ohm 1% 1/4 W (the main LED); 100 ohm; 100 k; 330 ohm (a handful of each, 10 per value) | |
+| Logic-level N-MOSFET, SOT-23 (AO3400A or equivalent; the wide LED and the motors, no longer the main LED) | 12 |
+| NPN transistor BC817-40, SOT-23 (the main LED's current sink, Q1) | 6 |
+| NPN transistor BC847, SOT-23 (the current limit, Q2) | 6 |
+| Resistors: 3.6 ohm 1% 1/4 W (Rs, the main LED; also 3.3 ohm 1% for trimming, 4 of each); 680 ohm; 100 ohm; 100 k; 330 ohm (a handful of each, 10 per value) | |
 | Resistors 220 k (battery divider: 2 per board, so 12) | 14 |
 | Resistors 47, 68, 100, 150, 220, 330 ohm 1/4 W, 4 of each (tuning the shotgun LED's range) | 24 |
 | Resistor 10 k (trigger C pull-up; the gate pull-downs of the new MOSFETs use the 100 k) | 4 |
