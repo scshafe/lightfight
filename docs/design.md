@@ -269,7 +269,7 @@ sensor.
 | Item | Qty | Est. cost (USD) |
 |------|-----|-----------------|
 | ESP32-C3 dev board (blaster, vest hub) | 2 | 10 |
-| 940 nm IR LED (eye-safe class, rated ≥100 mA continuous and 200 mA repetitive) + constant-current driver (2 transistors, 3 resistors) for the main LED, MOSFET + resistor for the wide one | 1–2 | 3.3 |
+| 940 nm IR LED (eye-safe class, rated ≥100 mA continuous and 200 mA repetitive) + constant-current driver (2 transistors, 3 resistors, a 0.1 A PTC) for the main LED, MOSFET + resistor for the wide one | 1–2 | 3.3 |
 | 38 kHz IR receiver modules (TSOP38238 class) for vest and headband | 5 | 6 |
 | Vibration motor, piezo buzzer, status LEDs, trigger and reload switches | — | 6 |
 | 1S Li-ion/LiPo cells with built-in protection (blaster, hub) | 2 | 12 |
@@ -331,8 +331,21 @@ owner's. A cheaper kit variant exists (decision 8).
   - The constant-current driver does not change the worst case: the peak is
     at most 200 mA at any cell voltage and temperature (181 mA nominal), the
     same ceiling the 0.12 W beam above is computed for, so the figures stand. A
-    fault that shorts the sink transistor is not covered by the firmware gate
-    (docs/hardware.md, "A fault the firmware cannot cover").
+    single fault in the sink (Q1 short, or Rs shorted) is not covered by the
+    firmware gate; a resettable fuse (hold 0.1 A) in the LED branch limits it
+    (docs/hardware.md, "A single fault in the sink"). Worst case without it:
+    Q1 shorted gives up to 0.76 A continuous, which I take as about 0.46 W
+    in the beam (generous, 3.8 times the 0.12 W at 200 mA); that is
+    366 W/m^2 at the lens face and 201 W/m^2 at 200 mm, and the exempt limit
+    18000 t^-0.75 W/m^2 allows 180 s and 400 s respectively. With the fuse the
+    fault current is at most 0.36 A, about 0.22 W in the beam, 175 W/m^2 at the
+    face (482 s allowed) and 96 W/m^2 at 200 mm (about 1000 s), and the fuse
+    clears it in a few to tens of seconds, which the bench measures (B2):
+    over 20 s at any cell voltage fails. The margin is 20 times or more at
+    the face if it clears in 20 s. The fault is invisible light, so there
+    is no aversion response, and I assume the person has not stared into the
+    lens from 200 mm for that long. The LED itself is outside this: it is
+    well over its rating in the fault.
   - These rest on typical datasheet and modelled values, not measurements. The
     firmware gate (5% cap) is what holds the averages; do not raise it, the
     current or the duty without redoing this.
@@ -361,7 +374,8 @@ owner's. A cheaper kit variant exists (decision 8).
   average within its continuous rating: the lensed LED peaks at 200 mA, its
   repetitive-pulse rating at 50% duty, and averages 100 mA in a mark; a
   constant-current sink holds it at 200 mA or less at every cell voltage and
-  temperature). A gate or base pull-down keeps the LED
+  temperature, and a 0.1 A resettable fuse in the LED branch limits a single
+  fault in the sink). A gate or base pull-down keeps the LED
   off if the MCU hangs or boots. Firmware enforces a fire-rate cap and a
   maximum frame duty cycle (frame 40 ms at most every 250 ms, carrier 50%,
   so the average duty stays under about 8%), and a watchdog resets on a stuck

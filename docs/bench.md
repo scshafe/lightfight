@@ -57,7 +57,9 @@ and an oscilloscope across it, or a multimeter in series for the average.
    voltage with a 500 mA limit stands in for the cell; the XIAO then runs from
    it). The peak current at the three voltages must agree within 10%.
 
-Record the numbers at each voltage and the room temperature. Fail if the peak
+Record the numbers at each voltage and the room temperature. (The PTC in the
+LED branch must not trip in this test or in a minute of autofire at four shots
+a second: if it does, the 0.1 A part is too small, so fit the 0.25 A part.) Fail if the peak
 exceeds 200 mA at any of the three voltages, or the spread is over 10%: check
 Q2 and Rs (a larger Rs lowers the current); if it is well below 181 mA, check
 the sink's headroom and the base drive. The sink's sense voltage drifts about
@@ -65,6 +67,33 @@ the sink's headroom and the base drive. The sink's sense voltage drifts about
 used in the cold, repeat once with the board cooled (a cold pack, about 5 C)
 before trimming Rs down. The carrier duty in the capture (B3)
 reads 50%, within the tool's 2% tolerance.
+
+### B2b - the LED branch's fuse trips on a single fault
+
+Needs a sacrificial LED and sense resistor (the fault can damage the LED), the
+bench supply with a 1 A limit standing in for the cell, an ammeter or the 1 ohm
+shunt on a scope, and a stopwatch. Point the lens at a wall with the lens
+capped or a card in front and nobody in line: the beam is about 0.2 W with
+the fault, invisible, and not to be looked into. Wear no optical aids at the
+lens. For each fault, at 4.2, 3.7 and 3.3 V:
+
+1. Flash the `blaster-bench` role and fit the sacrificial LED. Let the board
+   boot with the LED branch's fuse in place and cool (a few minutes with
+   the supply off between runs, so the fuse starts at room temperature).
+2. **Q1 short:** with the supply off, bridge Q1's collector to its emitter
+   with a wire. Switch on and note the branch current at once and its time to
+   fall below 30 mA (the fuse tripped). The board is bench-fired once a second,
+   so the current is what the LED branch draws between and through frames; the
+   fault makes it continuous.
+3. **Rs short:** with the supply off, bridge Rs and repeat.
+4. Record for each of the six runs: the fault current at the start, the time
+   to trip, and whether the LED still lights after the fuse cools and the
+   fault is removed. Pass: trips in 10 s or less at 4.2 and 3.7 V and in 20 s
+   or less at 3.3 V, in all six runs, and a faultless blaster fires normally
+   after cooling. Fail: any run does not trip or takes longer; then the
+   alternative in docs/hardware.md (a current-limit load switch) replaces the
+   fuse. Record the part number and its hold and trip currents with the
+   results.
 
 ## B3 - waveform
 
