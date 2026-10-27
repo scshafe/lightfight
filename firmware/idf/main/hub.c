@@ -19,6 +19,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "battery.h"
 #include "gatt.h"
 #include "lf_hub.h"
 #include "lf_link.h"
@@ -44,8 +45,7 @@ static SemaphoreHandle_t s_lock; /* the hub task and the BLE callbacks share s_h
 static void link_config(void *c, const lf_ble_config *v) { lf_hub_apply_config(c, v); }
 static int link_command(void *c, uint8_t cmd, uint32_t ms) { return lf_hub_command(c, cmd, ms); }
 static void link_ack(void *c, uint16_t id) { lf_hub_ack(c, id); }
-/* battery: 100 until a divider on an ADC pin exists (not in the BOM yet) */
-static void link_state(void *c, lf_ble_state *s) { lf_hub_state(c, 100, s); }
+static void link_state(void *c, lf_ble_state *s) { lf_hub_state(c, battery_percent(), s); }
 static const lf_ble_event *link_pending(void *c, unsigned i) { return lf_evq_pending(&((lf_hub *)c)->events, i); }
 
 static void IRAM_ATTR on_edge(void *arg)
@@ -91,6 +91,7 @@ void hub_run(void)
 
     s_lock = xSemaphoreCreateMutex();
     static const lf_link_ops ops = {&s_hub, link_config, link_command, link_ack, link_state, link_pending};
+    battery_start();
     gatt_start(&ops, s_lock);
 
     ESP_ERROR_CHECK(gpio_install_isr_service(0));

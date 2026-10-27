@@ -17,11 +17,11 @@ menu "lightfight"
 
     config LF_PIN_TRIGGER
         int "GPIO of the trigger switch to ground (blaster)"
-        default 4
+        default 5
 
     config LF_PIN_RELOAD
         int "GPIO of the reload switch to ground (blaster)"
-        default 5
+        default 6
 
     config LF_PIN_STATUS_LED
         int "GPIO of the status LED"
@@ -34,7 +34,10 @@ menu "lightfight"
 
     config LF_PIN_SENSOR1
         int "GPIO of IR receiver 1, left shoulder (hub)"
-        default 4
+        default 2
+        help
+            GPIO2 is a strapping pin that must be high at reset; the receiver
+            output idles high, which is what it wants.
         depends on LF_ROLE_HUB
 
     config LF_PIN_SENSOR2
@@ -61,6 +64,18 @@ menu "lightfight"
         int "GPIO of the buzzer (hub)"
         default 20
         depends on LF_ROLE_HUB
+
+    config LF_PIN_BATTERY
+        int "ADC GPIO at the midpoint of the 2 x 220 k battery divider"
+        default 4
+        help
+            Must be an ADC1 pin (GPIO0-4 on the C3). docs/hardware.md.
+
+    config LF_BATTERY_CAL_PERMILLE
+        int "Battery reading calibration, parts per thousand (1000 = none)"
+        default 1000
+        help
+            Set from a multimeter reading of the cell during bench step B9.
 
     config LF_PIN_PAIR
         int "GPIO of the pair button to ground (BOOT on the XIAO)"

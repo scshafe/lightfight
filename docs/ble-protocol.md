@@ -80,8 +80,9 @@ queues an `event` (`lf_evq`, 32 slots).
 
 The device keeps playing with no phone (docs/design.md). While a match is
 active a new `config` is ignored (it applies to the next one); `start` while
-active and `stop` while idle do nothing. `battery_pct` is a constant 100 until
-a voltage divider on an ADC pin is added to the hardware.
+active and `stop` while idle do nothing. `battery_pct` is measured: a divider on an ADC pin
+(docs/hardware.md), averaged, mapped through a typical resting-cell curve; 100
+until the first sample, and unchanged when no cell is connected.
 
 ## The blaster and a downed player
 

@@ -10,6 +10,7 @@
 #include "freertos/task.h"
 
 #include "emitter_rmt.h"
+#include "battery.h"
 #include "gatt.h"
 #include "lf_emitter.h"
 #include "lf_link.h"
@@ -66,7 +67,6 @@ static int link_command(void *c, uint8_t cmd, uint32_t ms)
 
 static void link_ack(void *c, uint16_t id) { (void)c; (void)id; } /* the blaster has no events */
 
-/* battery: 100 until a divider on an ADC pin exists (not in the BOM yet) */
 static void link_state(void *c, lf_ble_state *s)
 {
     (void)c;
@@ -74,7 +74,7 @@ static void link_state(void *c, lf_ble_state *s)
                          (s_rules.reloading ? LF_STATE_RELOADING : 0) | (s_rules.disabled ? LF_STATE_DISABLED : 0));
     s->health = s_rules.health;
     s->ammo = s_rules.ammo;
-    s->battery_pct = 100;
+    s->battery_pct = battery_percent();
 }
 
 static uint32_t now_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
@@ -153,6 +153,7 @@ void blaster_run(void)
 
     s_lock = xSemaphoreCreateMutex();
     static const lf_link_ops ops = {NULL, link_config, link_command, link_ack, link_state, NULL};
+    battery_start();
     gatt_start(&ops, s_lock);
 
     int trigger_was = 1, reload_was = 1;

@@ -33,12 +33,19 @@ materials") fixes the shape, not the part.
   resistor gives about 60 mA. These figures come from my reading of typical
   datasheet values; **recompute them from the datasheet of the part actually
   bought and confirm by measurement** (bench step B2).
-- **Inputs:** trigger and reload tact switches to ground on `LF_PIN_TRIGGER`
+- **Inputs (pins moved by the battery divider):** trigger and reload tact switches to ground on `LF_PIN_TRIGGER`
   and `LF_PIN_RELOAD` (internal pull-ups). A status LED with its own 330 ohm
   resistor on `LF_PIN_STATUS_LED`.
 - **Pins (defaults in `firmware/idf/main/Kconfig.projbuild`, XIAO labels):**
-  IR gate GPIO3 (D1), trigger GPIO4 (D2), reload GPIO5 (D3), status LED
-  GPIO10 (D10). GPIO8/9 and GPIO2 are strapping pins: avoid them.
+  IR gate GPIO3 (D1), battery sense GPIO4 (D2), trigger GPIO5 (D3), reload
+  GPIO6 (D4), status LED GPIO10 (D10). GPIO8/9 and GPIO2 are strapping pins: avoid them.
+- **Battery sense:** two equal 220 k resistors in series from the cell's
+  positive (after the fuse) to ground, the midpoint to `LF_PIN_BATTERY`
+  (GPIO4, D2, an ADC1 pin) with a 100 nF capacitor to ground. The ADC sees half
+  the cell voltage (2.1 V at 4.2 V, inside the 12 dB range) and the divider
+  draws about 10 uA. Firmware averages 16 samples a second, converts with the
+  chip's calibration and reports a percentage from a typical curve
+  (`firmware/lib/lf_battery.c`); bench step B9 checks and calibrates it.
 - **Power:** one protected 1S LiPo (built-in protection circuit against
   over-charge, over-discharge and short circuit) with an inline resettable
   fuse, in an enclosure that holds it fixed and away from the grip's crush
@@ -52,8 +59,11 @@ in the supply, on a wired harness (chest, left and right shoulder, two on the
 headband); a coin vibration motor behind a MOSFET with a flyback diode; a
 buzzer; status LEDs. Same battery arrangement as the blaster.
 
-Hub pins (defaults in `Kconfig.projbuild`, XIAO labels): receivers on GPIO3-7
-(D1-D5: chest, left shoulder, right shoulder, headband front, headband back),
+Hub pins (defaults in `Kconfig.projbuild`, XIAO labels): receivers on GPIO3,
+GPIO2, GPIO5, GPIO6, GPIO7 (chest, left shoulder, right shoulder, headband
+front, headband back; GPIO2 is a strapping pin that must be high at reset, which
+a receiver's idle-high output is), battery sense GPIO4 (D2, same divider as the
+blaster),
 vibration motor gate GPIO21 (D6), buzzer GPIO20 (D7), status LED GPIO10 (D10).
 A receiver module's output is open-collector-like with an internal pull-up and
 idles high; keep each harness lead short or shielded, as it carries 560 us
@@ -71,8 +81,9 @@ The pair button is the XIAO's own BOOT button (GPIO9); nothing to wire.
 | 940 nm IR LED, 5 mm (TSAL6200 or equivalent) | 6 |
 | Logic-level N-MOSFET, SOT-23 (AO3400A or equivalent) | 8 |
 | Resistors: 27 ohm 1/4 W; 100 ohm; 100 k; 330 ohm (a handful of each, 10 per value) | |
+| Resistors 220 k (battery divider: 2 per board, so 12) | 14 |
 | 38 kHz IR receiver module, TSOP38238 class | 14 |
-| Capacitors, 100 nF ceramic | 14 |
+| Capacitors, 100 nF ceramic (receivers and battery sense) | 20 |
 | Tact switches | 10 |
 | Coin vibration motor 3 V, with 1N4148 diode and a spare MOSFET each | 3 |
 | Piezo buzzer, 3 V | 3 |

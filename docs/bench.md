@@ -160,6 +160,23 @@ nRF Connect). Flash the hub (or the blaster) as before.
 Report what happened at each step in the PR. These steps are the first time
 this code runs on a board.
 
+## B9 - battery reading
+
+Needs a multimeter and a charged pack. Flash a board with its pack connected.
+
+1. Measure the cell voltage at the divider's top (after the fuse) and read the
+   monitor's battery line (it prints the cell millivolts once a second). They
+   must agree within 2%; if not, set `LF_BATTERY_CAL_PERMILLE` (1000 x
+   multimeter reading / printed reading) and flash again.
+2. State (B8, step 2) shows `battery_pct`: about 100 at 4.2 V, about 25 at
+   3.83 V. The percentage is a typical resting-cell curve, not your cell's:
+   note how the real pack behaves (a pack rated for 1000 mAh may reach
+   3.3 V earlier or later) and record the voltages for 100, 50 and 10 percent.
+3. Fire the blaster or buzz the motor and watch the percentage: it must not
+   jump (the reading is averaged over about 8 s).
+4. Unplug the pack and power from USB only: the percentage stays at its last
+   value (100 if none), it does not drop to 0.
+
 ## Records
 
 Keep the results (numbers and the capture's output) in the PR that reports
